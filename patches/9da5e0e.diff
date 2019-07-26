@@ -1,0 +1,54 @@
+From 9da5e0e0c7ce1239d7e29ca33d5ea945e55e28e4 Mon Sep 17 00:00:00 2001
+From: Jason Lowe-Power <jason@lowepower.com>
+Date: Tue, 28 Aug 2018 18:50:21 -0700
+Subject: [PATCH] cpu-kvm, arch-x86: Fix KVM on Intel platforms
+
+This is the minimal set of changes from the patch that's been floating
+around for a few years originally by Mike Upton.
+
+See http://reviews.gem5.org/r/2613/ and
+https://gem5-review.googlesource.com/c/public/gem5/+/7361
+
+The change to the tssDesc is the minimal change to get KVM working on
+Intel platforms. However, the other changes seem prudent to add.
+
+Tested on both Intel (i7-7700) and AMD (EPYC 7451) platforms.
+
+Change-Id: I000c7ba102ba161c2bb5e224bf826216cf0ff87a
+Signed-off-by: Jason Lowe-Power <jason@lowepower.com>
+---
+
+diff --git a/src/arch/x86/system.cc b/src/arch/x86/system.cc
+index 0f85fdb..ae009d5 100644
+--- a/src/arch/x86/system.cc
++++ b/src/arch/x86/system.cc
+@@ -179,6 +179,12 @@
+ 
+     // 32 bit data segment
+     SegDescriptor dsDesc = initDesc;
++    dsDesc.type.e = 0;
++    dsDesc.type.w = 1;
++    dsDesc.d = 1;
++    dsDesc.baseHigh = 0;
++    dsDesc.baseLow = 0;
++
+     uint64_t dsDescVal = dsDesc;
+     physProxy.writeBlob(GDTBase + numGDTEntries * 8,
+                         (uint8_t *)(&dsDescVal), 8);
+@@ -195,10 +201,16 @@
+     tc->setMiscReg(MISCREG_SS, (MiscReg)ds);
+ 
+     tc->setMiscReg(MISCREG_TSL, 0);
++    SegAttr ldtAttr = 0;
++    ldtAttr.unusable = 1;
++    tc->setMiscReg(MISCREG_TSL_ATTR, ldtAttr);
+     tc->setMiscReg(MISCREG_TSG_BASE, GDTBase);
+     tc->setMiscReg(MISCREG_TSG_LIMIT, 8 * numGDTEntries - 1);
+ 
+     SegDescriptor tssDesc = initDesc;
++    tssDesc.type = 0xB;
++    tssDesc.s = 0;
++
+     uint64_t tssDescVal = tssDesc;
+     physProxy.writeBlob(GDTBase + numGDTEntries * 8,
+                         (uint8_t *)(&tssDescVal), 8);

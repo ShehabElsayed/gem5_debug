@@ -1,0 +1,3 @@
+patch: 9da5e0e
+source: https://gem5-review.googlesource.com/c/public/gem5/+/12278
+Fixes: "panic: KVM: Failed to enter virtualized mode (hw reason: 0x80000021)"
