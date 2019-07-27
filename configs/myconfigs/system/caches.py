@@ -223,7 +223,7 @@ class BankedL3Cache(SubSystem):
         bank_size = MemorySize(opts.l3_size) / opts.l3_banks
         self.banks = [L3CacheBank(size = bank_size)
                       for i in range(opts.l3_banks)]
-        ranges = self._getInterleaveRanges(AllMemory, opts.l3_banks, 7, 0)
+        ranges = self._getInterleaveRanges(AllMemory, opts.l3_banks, 7, 20)
         for i, bank in enumerate(self.banks):
             bank.addr_ranges = ranges[i]
 
