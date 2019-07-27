@@ -1,3 +1,7 @@
 patch: 9da5e0e
 source: https://gem5-review.googlesource.com/c/public/gem5/+/12278
 Fixes: "panic: KVM: Failed to enter virtualized mode (hw reason: 0x80000021)"
+
+patch: 3403665
+source: https://gem5-review.googlesource.com/c/public/gem5/+/13855/1
+Fixes: "panic: could not seek: Invalid argument: and several flags not set warnings when using /sbin/m5 readfile pseudo instruction

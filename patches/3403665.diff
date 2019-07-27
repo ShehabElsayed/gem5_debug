@@ -1,0 +1,40 @@
+From 3403665994b55f664f4edfc9074650aaa7ddcd2c Mon Sep 17 00:00:00 2001
+From: Jason Lowe-Power <jason@lowepower.com>
+Date: Fri, 03 Mar 2017 15:55:39 -0600
+Subject: [PATCH] kvm: Fix for m5readfile magic instruction
+
+For some reason, if the thread context is set to dirty this magic
+instruction doesn't work correctly. This change doesn't break any other
+magic instruction I've tested.
+
+From Andreas S:
+This patch should work in most cases since we typically observe
+the ABI rules in m5ops (they are basically a C call). The biggest
+difference is that the return value is the result of the load. The
+reason the TC is marked as dirty is that m5ops could modify the TC.
+Because of that, you need to copy it back into KVM. IIRC, this caused
+issues because the instruction is in a weird half-executed state when
+you handle MMIOs. Specifically, the destination register of the load
+ended up in an ill-defined state.
+
+The good, long-term, solution to this problem is to do lazy register
+synchronisation. I.e., only copy state to gem5's TC when it is requested
+(i.e., read*Reg) and only write back modified registers.
+See https://gem5-review.googlesource.com/c/public/gem5/+/12278
+
+Change-Id: Ia53a2e0a4265b11fd0e8b206fb78db8b3fd126d5
+Signed-off-by: Jason Lowe-Power <jason@lowepower.com>
+---
+
+diff --git a/src/cpu/kvm/base.cc b/src/cpu/kvm/base.cc
+index 77cf277..383c093 100644
+--- a/src/cpu/kvm/base.cc
++++ b/src/cpu/kvm/base.cc
+@@ -1142,7 +1142,6 @@
+         const Cycles ipr_delay(write ?
+                              TheISA::handleIprWrite(tc, pkt) :
+                              TheISA::handleIprRead(tc, pkt));
+-        threadContextDirty = true;
+         delete pkt;
+         return clockPeriod() * ipr_delay;
+     } else {
