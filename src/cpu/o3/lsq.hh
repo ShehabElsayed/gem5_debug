@@ -223,9 +223,8 @@ class LSQ
             NotIssued,
             Translation,
             Request,
-            Complete,
-            Squashed,
             Fault,
+            PartialFault,
         };
         State _state;
         LSQSenderState* _senderState;
@@ -562,6 +561,19 @@ class LSQ
         isSent()
         {
             return flags.isSet(Flag::Sent);
+        }
+
+        bool
+        isPartialFault()
+        {
+            return _state == State::PartialFault;
+        }
+
+        bool
+        isMemAccessRequired()
+        {
+            return (_state == State::Request ||
+                    (isPartialFault() && isLoad()));
         }
 
         /**
