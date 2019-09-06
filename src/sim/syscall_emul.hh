@@ -226,6 +226,9 @@ SyscallReturn gettidFunc(SyscallDesc *desc, int num, ThreadContext *tc);
 /// Target chown() handler.
 SyscallReturn chownFunc(SyscallDesc *desc, int num, ThreadContext *tc);
 
+/// Target getpgrpFunc() handler.
+SyscallReturn getpgrpFunc(SyscallDesc *desc, int num, ThreadContext *tc);
+
 /// Target setpgid() handler.
 SyscallReturn setpgidFunc(SyscallDesc *desc, int num, ThreadContext *tc);
 
@@ -252,7 +255,10 @@ SyscallReturn pipeFunc(SyscallDesc *desc, int num, ThreadContext *tc);
 
 /// Internal pipe() handler.
 SyscallReturn pipeImpl(SyscallDesc *desc, int num, ThreadContext *tc,
-                       bool pseudoPipe);
+                       bool pseudo_pipe, bool is_pipe2=false);
+
+/// Target pipe() handler.
+SyscallReturn pipe2Func(SyscallDesc *desc, int num, ThreadContext *tc);
 
 /// Target getpid() handler.
 SyscallReturn getpidFunc(SyscallDesc *desc, int num, ThreadContext *tc);
@@ -1338,7 +1344,7 @@ fstat64Func(SyscallDesc *desc, int callnum, ThreadContext *tc)
     int tgt_fd = p->getSyscallArg(tc, index);
     Addr bufPtr = p->getSyscallArg(tc, index);
 
-    auto ffdp = std::dynamic_pointer_cast<FileFDEntry>((*p->fds)[tgt_fd]);
+    auto ffdp = std::dynamic_pointer_cast<HBFDEntry>((*p->fds)[tgt_fd]);
     if (!ffdp)
         return -EBADF;
     int sim_fd = ffdp->getSimFD();
@@ -1966,6 +1972,12 @@ getrlimitFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
       case OS::TGT_RLIMIT_DATA:
         // max data segment size in bytes: make up a number
         rlp->rlim_cur = rlp->rlim_max = 256 * 1024 * 1024;
+        rlp->rlim_cur = TheISA::htog(rlp->rlim_cur);
+        rlp->rlim_max = TheISA::htog(rlp->rlim_max);
+        break;
+
+      case OS::TGT_RLIMIT_NPROC:
+        rlp->rlim_cur = rlp->rlim_max = tc->getSystemPtr()->numContexts();
         rlp->rlim_cur = TheISA::htog(rlp->rlim_cur);
         rlp->rlim_max = TheISA::htog(rlp->rlim_max);
         break;

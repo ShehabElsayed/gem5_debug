@@ -199,8 +199,8 @@ Process::clone(ThreadContext *otc, ThreadContext *ntc,
          * host file descriptors are also dup'd so that the flags for the
          * host file descriptor is independent of the other process.
          */
+        std::shared_ptr<FDArray> nfds = np->fds;
         for (int tgt_fd = 0; tgt_fd < fds->getSize(); tgt_fd++) {
-            std::shared_ptr<FDArray> nfds = np->fds;
             std::shared_ptr<FDEntry> this_fde = (*fds)[tgt_fd];
             if (!this_fde) {
                 nfds->setFDEntry(tgt_fd, nullptr);
@@ -282,7 +282,7 @@ Process::initState()
     // mark this context as active so it will start ticking.
     tc->activate();
 
-    pTable->initState(tc);
+    pTable->initState();
 }
 
 DrainState
@@ -529,8 +529,6 @@ Process::absolutePath(const std::string &filename, bool host_filesystem)
 Process *
 ProcessParams::create()
 {
-    Process *process = nullptr;
-
     // If not specified, set the executable parameter equal to the
     // simulated system's zeroth command line parameter
     if (executable == "") {
@@ -538,9 +536,9 @@ ProcessParams::create()
     }
 
     ObjectFile *obj_file = createObjectFile(executable);
-    fatal_if(!obj_file, "Can't load object file %s", executable);
+    fatal_if(!obj_file, "Cannot load object file %s.", executable);
 
-    process = ObjectFile::tryLoaders(this, obj_file);
+    Process *process = ObjectFile::tryLoaders(this, obj_file);
     fatal_if(!process, "Unknown error creating process object.");
 
     return process;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2013, 2015-2018 ARM Limited
+ * Copyright (c) 2010-2013, 2015-2019 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -962,6 +962,18 @@ decodeCP15Reg64(unsigned crm, unsigned opc1)
             return MISCREG_CNTHP_CVAL;
         }
         break;
+      case 12:
+        switch (opc1) {
+          case 0:
+            return MISCREG_ICC_SGI1R;
+          case 1:
+            return MISCREG_ICC_ASGI1R;
+          case 2:
+            return MISCREG_ICC_SGI0R;
+          default:
+            break;
+        }
+        break;
       case 15:
         if (opc1 == 0)
             return MISCREG_CPUMERRSR;
@@ -1117,7 +1129,7 @@ canReadAArch64SysReg(MiscRegIndex reg, SCR scr, CPSR cpsr, ThreadContext *tc)
 
     bool secure = ArmSystem::haveSecurity(tc) && !scr.ns;
 
-    switch (opModeToEL((OperatingMode) (uint8_t) cpsr.mode)) {
+    switch (currEL(cpsr)) {
       case EL0:
         return secure ? miscRegInfo[reg][MISCREG_USR_S_RD] :
             miscRegInfo[reg][MISCREG_USR_NS_RD];
@@ -1140,7 +1152,7 @@ canWriteAArch64SysReg(MiscRegIndex reg, SCR scr, CPSR cpsr, ThreadContext *tc)
     // Check for SP_EL0 access while SPSEL == 0
     if ((reg == MISCREG_SP_EL0) && (tc->readMiscReg(MISCREG_SPSEL) == 0))
         return false;
-    ExceptionLevel el = opModeToEL((OperatingMode) (uint8_t) cpsr.mode);
+    ExceptionLevel el = currEL(cpsr);
     if (reg == MISCREG_DAIF) {
         SCTLR sctlr = tc->readMiscReg(MISCREG_SCTLR_EL1);
         if (el == EL0 && !sctlr.uma)
@@ -1984,6 +1996,8 @@ decodeAArch64SysReg(unsigned op0, unsigned op1,
                         return MISCREG_SPSEL;
                       case 2:
                         return MISCREG_CURRENTEL;
+                      case 3:
+                        return MISCREG_PAN;
                     }
                     break;
                   case 6:
@@ -4057,6 +4071,9 @@ ISA::initializeMiscRegMetadata()
       .allPrivileges().exceptUserMode();
     InitReg(MISCREG_CURRENTEL)
       .allPrivileges().exceptUserMode().writes(0);
+    InitReg(MISCREG_PAN)
+      .allPrivileges().exceptUserMode()
+      .implemented(havePAN);
     InitReg(MISCREG_NZCV)
       .allPrivileges();
     InitReg(MISCREG_DAIF)

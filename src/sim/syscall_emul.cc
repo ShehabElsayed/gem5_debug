@@ -866,10 +866,21 @@ fcntl64Func(SyscallDesc *desc, int num, ThreadContext *tc)
 }
 
 SyscallReturn
-pipeImpl(SyscallDesc *desc, int callnum, ThreadContext *tc, bool pseudoPipe)
+pipeImpl(SyscallDesc *desc, int callnum, ThreadContext *tc, bool pseudo_pipe,
+         bool is_pipe2)
 {
-    int sim_fds[2], tgt_fds[2];
+    Addr tgt_addr = 0;
+    int flags = 0;
     auto p = tc->getProcessPtr();
+    if (!pseudo_pipe) {
+        int index = 0;
+        tgt_addr = p->getSyscallArg(tc, index);
+        if (is_pipe2) {
+            flags = p->getSyscallArg(tc, index);
+        }
+    }
+
+    int sim_fds[2], tgt_fds[2];
 
     int pipe_retval = pipe(sim_fds);
     if (pipe_retval == -1)
@@ -878,10 +889,12 @@ pipeImpl(SyscallDesc *desc, int callnum, ThreadContext *tc, bool pseudoPipe)
     auto rend = PipeFDEntry::EndType::read;
     auto rpfd = std::make_shared<PipeFDEntry>(sim_fds[0], O_WRONLY, rend);
     tgt_fds[0] = p->fds->allocFD(rpfd);
+    int sim_fd_rpfd = rpfd->getSimFD();
 
     auto wend = PipeFDEntry::EndType::write;
     auto wpfd = std::make_shared<PipeFDEntry>(sim_fds[1], O_RDONLY, wend);
     tgt_fds[1] = p->fds->allocFD(wpfd);
+    int sim_fd_wpfd = wpfd->getSimFD();
 
     /**
      * Now patch the read object to record the target file descriptor chosen
@@ -893,13 +906,10 @@ pipeImpl(SyscallDesc *desc, int callnum, ThreadContext *tc, bool pseudoPipe)
      * Alpha Linux convention for pipe() is that fd[0] is returned as
      * the return value of the function, and fd[1] is returned in r20.
      */
-    if (pseudoPipe) {
+    if (pseudo_pipe) {
         tc->setIntReg(SyscallPseudoReturnReg, tgt_fds[1]);
         return tgt_fds[0];
     }
-
-    int index = 0;
-    Addr tgt_addr = p->getSyscallArg(tc, index);
 
     /**
      * Copy the target file descriptors into buffer space and then copy
@@ -910,6 +920,45 @@ pipeImpl(SyscallDesc *desc, int callnum, ThreadContext *tc, bool pseudoPipe)
     buf_ptr[0] = tgt_fds[0];
     buf_ptr[1] = tgt_fds[1];
     tgt_handle.copyOut(tc->getVirtProxy());
+
+    // pipe2 has additional behavior if flags != 0
+    if (is_pipe2 && flags) {
+        // pipe2 only uses O_NONBLOCK, O_CLOEXEC, and (O_NONBLOCK | O_CLOEXEC)
+        // if flags set to anything else, return EINVAL
+        if ((flags != O_CLOEXEC) && (flags != O_NONBLOCK) &&
+            (flags != (O_CLOEXEC | O_NONBLOCK))) {
+            return -EINVAL;
+        }
+
+        /*
+          If O_NONBLOCK is passed in as a flag to pipe2, set O_NONBLOCK file
+          status flag for two new open file descriptors.
+        */
+        if (flags & O_NONBLOCK) {
+            /*
+              O_NONBLOCK is set when the programmer wants to avoid a separate
+              call(s) to fcntl in their code, so mirror the fcntl
+              implementation for handling file descriptors -- rely on host to
+              maintain file status flags.
+            */
+            if (fcntl(sim_fd_rpfd, F_SETFL, O_NONBLOCK)) {
+                return -errno;
+            }
+            if (fcntl(sim_fd_wpfd, F_SETFL, O_NONBLOCK)) {
+                return -errno;
+            }
+        }
+
+        /*
+          If O_CLOEXEC is passed in as a flag to pipe2, set close-on-exec
+          (FD_CLOEXEC) file status flag for two new open file descriptors.
+        */
+        if (flags & O_CLOEXEC) {
+            rpfd->setCOE(true);
+            wpfd->setCOE(true);
+        }
+    }
+
     return 0;
 }
 
@@ -926,6 +975,21 @@ pipeFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
 }
 
 SyscallReturn
+pipe2Func(SyscallDesc *desc, int callnum, ThreadContext *tc)
+{
+    // call pipeImpl since the only difference between pipe and pipe2 is
+    // the flags values and what they do (at the end of pipeImpl)
+    return pipeImpl(desc, callnum, tc, false, true);
+}
+
+SyscallReturn
+getpgrpFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
+{
+    auto process = tc->getProcessPtr();
+    return process->pgid();
+}
+
+SyscallReturn
 setpgidFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
 {
     int index = 0;
@@ -937,7 +1001,7 @@ setpgidFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
         return -EINVAL;
 
     if (pid == 0) {
-        process->setpgid(process->pid());
+        process->pgid(process->pid());
         return 0;
     }
 
@@ -956,7 +1020,7 @@ setpgidFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
     }
 
     assert(matched_ph);
-    matched_ph->setpgid((pgid == 0) ? matched_ph->pid() : pgid);
+    matched_ph->pgid((pgid == 0) ? matched_ph->pid() : pgid);
 
     return 0;
 }

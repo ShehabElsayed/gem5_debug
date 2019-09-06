@@ -29,49 +29,26 @@
 #ifndef __MEM_RUBY_FILTERS_H3BLOOMFILTER_HH__
 #define __MEM_RUBY_FILTERS_H3BLOOMFILTER_HH__
 
-#include "mem/ruby/filters/AbstractBloomFilter.hh"
+#include "mem/ruby/filters/MultiBitSelBloomFilter.hh"
 
-struct H3BloomFilterParams;
+struct BloomFilterH3Params;
+
+namespace BloomFilter {
 
 /**
  * Implementation of the bloom filter as described in "Implementing Signatures
  * for Transactional Memory", by Sanchez, Daniel, et al.
  */
-class H3BloomFilter : public AbstractBloomFilter
+class H3 : public MultiBitSel
 {
   public:
-    H3BloomFilter(const H3BloomFilterParams* p);
-    ~H3BloomFilter();
+    H3(const BloomFilterH3Params* p);
+    ~H3();
 
-    void merge(const AbstractBloomFilter* other) override;
-    void set(Addr addr) override;
-    int getCount(Addr addr) const override;
-
-  private:
-    /**
-     * Apply a hash functions to an address.
-     *
-     * @param addr The address to hash.
-     * @param hash_number Index of the H3 hash function to be used.
-     */
-    int hash(Addr addr, int hash_number) const;
-
-    /**
-     * Apply one of the H3 hash functions to a value.
-     *
-     * @param value The value to hash.
-     * @param hash_number Index of the hash function to be used.
-     */
-    int hashH3(uint64_t value, int hash_number) const;
-
-    /** The number of hashes used in this filter. Can be at most 16. */
-    const int numHashes;
-
-    /** Whether hashing should be performed in parallel. */
-    bool isParallel;
-
-    /** Size of the filter when doing parallel hashing. */
-    int parFilterSize;
+  protected:
+    int hash(Addr addr, int hash_number) const override;
 };
+
+} // namespace BloomFilter
 
 #endif // __MEM_RUBY_FILTERS_H3BLOOMFILTER_HH__

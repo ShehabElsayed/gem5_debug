@@ -32,9 +32,11 @@
 
 #include "base/logging.hh"
 #include "base/bitfield.hh"
-#include "params/H3BloomFilter.hh"
+#include "params/BloomFilterH3.hh"
 
-static int H3[64][16] = {
+namespace BloomFilter {
+
+static int H3Matrix[64][16] = {
     { 33268410,   395488709,  311024285,  456111753,
       181495008,  119997521,  220697869,  433891432,
       755927921,  515226970,  719448198,  349842774,
@@ -356,74 +358,41 @@ static int H3[64][16] = {
       394261773,  848616745,  15446017,   517723271,  },
 };
 
-H3BloomFilter::H3BloomFilter(const H3BloomFilterParams* p)
-    : AbstractBloomFilter(p), numHashes(p->num_hashes),
-      isParallel(p->is_parallel), parFilterSize(p->size / numHashes)
+H3::H3(const BloomFilterH3Params* p)
+    : MultiBitSel(p)
 {
-    fatal_if(numHashes > 16, "There are only 16 hash functions implemented.");
+    fatal_if(numHashes > 16, "There are only 16 H3 functions implemented.");
 }
 
-H3BloomFilter::~H3BloomFilter()
+H3::~H3()
 {
-}
-
-void
-H3BloomFilter::merge(const AbstractBloomFilter *other)
-{
-    auto* cast_other = static_cast<const H3BloomFilter*>(other);
-    assert(filter.size() == cast_other->filter.size());
-    for (int i = 0; i < filter.size(); ++i){
-        filter[i] |= cast_other->filter[i];
-    }
-}
-
-void
-H3BloomFilter::set(Addr addr)
-{
-    for (int i = 0; i < numHashes; i++) {
-        filter[hash(addr, i)] = 1;
-    }
 }
 
 int
-H3BloomFilter::getCount(Addr addr) const
+H3::hash(Addr addr, int hash_number) const
 {
-    int count = 0;
-    for (int i=0; i < numHashes; i++) {
-        count += filter[hash(addr, i)];
-    }
-    return count;
-}
-
-int
-H3BloomFilter::hash(Addr addr, int hash_number) const
-{
-    uint64_t x = bits(addr, std::numeric_limits<Addr>::digits - 1, offsetBits);
-    int y = hashH3(x, hash_number);
-
-    if (isParallel) {
-        return (y % parFilterSize) + hash_number * parFilterSize;
-    } else {
-        return y % filter.size();
-    }
-}
-
-int
-H3BloomFilter::hashH3(uint64_t value, int index) const
-{
-    uint64_t mask = 1;
-    uint64_t val = value;
+    uint64_t val =
+        bits(addr, std::numeric_limits<Addr>::digits - 1, offsetBits);
     int result = 0;
 
-    for (int i = 0; i < 64; i++) {
-        if (val&mask) result ^= H3[i][index];
-        val = val >> 1;
+    for (int i = 0; (i < 64) && val; i++, val >>= 1) {
+        if (val & 1) {
+            result ^= H3Matrix[i][hash_number];
+        }
     }
-    return result;
+
+    if (isParallel) {
+        return (result % parFilterSize) + hash_number * parFilterSize;
+    } else {
+        return result % filter.size();
+    }
 }
 
-H3BloomFilter*
-H3BloomFilterParams::create()
+} // namespace BloomFilter
+
+BloomFilter::H3*
+BloomFilterH3Params::create()
 {
-    return new H3BloomFilter(this);
+    return new BloomFilter::H3(this);
 }
+

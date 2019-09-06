@@ -31,33 +31,28 @@
 #include <limits>
 
 #include "base/bitfield.hh"
-#include "params/MultiBitSelBloomFilter.hh"
+#include "base/logging.hh"
+#include "params/BloomFilterMultiBitSel.hh"
 
-MultiBitSelBloomFilter::MultiBitSelBloomFilter(
-    const MultiBitSelBloomFilterParams* p)
-    : AbstractBloomFilter(p), numHashes(p->num_hashes),
-      skipBits(p->skip_bits),
+namespace BloomFilter {
+
+MultiBitSel::MultiBitSel(const BloomFilterMultiBitSelParams* p)
+    : Base(p), numHashes(p->num_hashes),
       parFilterSize(p->size / numHashes),
-      isParallel(p->is_parallel)
+      isParallel(p->is_parallel), skipBits(p->skip_bits)
 {
-}
-
-MultiBitSelBloomFilter::~MultiBitSelBloomFilter()
-{
-}
-
-void
-MultiBitSelBloomFilter::merge(const AbstractBloomFilter *other)
-{
-    auto cast_other = static_cast<const MultiBitSelBloomFilter*>(other);
-    assert(filter.size() == cast_other->filter.size());
-    for (int i = 0; i < filter.size(); ++i){
-        filter[i] |= cast_other->filter[i];
+    if (p->size % numHashes) {
+        fatal("Can't divide filter (%d) in %d equal portions", p->size,
+              numHashes);
     }
 }
 
+MultiBitSel::~MultiBitSel()
+{
+}
+
 void
-MultiBitSelBloomFilter::set(Addr addr)
+MultiBitSel::set(Addr addr)
 {
     for (int i = 0; i < numHashes; i++) {
         int idx = hash(addr, i);
@@ -66,7 +61,7 @@ MultiBitSelBloomFilter::set(Addr addr)
 }
 
 int
-MultiBitSelBloomFilter::getCount(Addr addr) const
+MultiBitSel::getCount(Addr addr) const
 {
     int count = 0;
     for (int i=0; i < numHashes; i++) {
@@ -76,37 +71,33 @@ MultiBitSelBloomFilter::getCount(Addr addr) const
 }
 
 int
-MultiBitSelBloomFilter::hash(Addr addr, int hash_number) const
+MultiBitSel::hash(Addr addr, int hash_number) const
 {
-    uint64_t x = bits(addr, std::numeric_limits<Addr>::digits - 1,
+    uint64_t value = bits(addr, std::numeric_limits<Addr>::digits - 1,
         offsetBits) >> skipBits;
-    int y = hashBitsel(x, hash_number, numHashes, 30, sizeBits);
-    //36-bit addresses, 6-bit cache lines
-
-    if (isParallel) {
-        return (y % parFilterSize) + hash_number * parFilterSize;
-    } else {
-        return y % filter.size();
-    }
-}
-
-int
-MultiBitSelBloomFilter::hashBitsel(uint64_t value, int index, int jump,
-                                    int maxBits, int numBits) const
-{
-    uint64_t mask = 1;
+    const int max_bits = std::numeric_limits<Addr>::digits - offsetBits;
     int result = 0;
     int bit, i;
 
-    for (i = 0; i < numBits; i++) {
-        bit = (index + jump*i) % maxBits;
-        if (value & (mask << bit)) result += mask << i;
+    for (i = 0; i < sizeBits; i++) {
+        bit = (hash_number + numHashes * i) % max_bits;
+        if (value & (1 << bit)) {
+            result += 1 << i;
+        }
     }
-    return result;
+
+    if (isParallel) {
+        return (result % parFilterSize) + hash_number * parFilterSize;
+    } else {
+        return result % filter.size();
+    }
 }
 
-MultiBitSelBloomFilter*
-MultiBitSelBloomFilterParams::create()
+} // namespace BloomFilter
+
+BloomFilter::MultiBitSel*
+BloomFilterMultiBitSelParams::create()
 {
-    return new MultiBitSelBloomFilter(this);
+    return new BloomFilter::MultiBitSel(this);
 }
+

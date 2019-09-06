@@ -28,81 +28,91 @@
 
 #include "mem/ruby/filters/MultiGrainBloomFilter.hh"
 
-#include "base/bitfield.hh"
-#include "params/MultiGrainBloomFilter.hh"
+#include "base/logging.hh"
+#include "params/BloomFilterMultiGrain.hh"
 
-MultiGrainBloomFilter::MultiGrainBloomFilter(
-    const MultiGrainBloomFilterParams* p)
-    : AbstractBloomFilter(p), pageFilter(p->page_filter_size),
-      pageFilterSizeBits(floorLog2(p->page_filter_size))
+namespace BloomFilter {
+
+MultiGrain::MultiGrain(const BloomFilterMultiGrainParams* p)
+    : Base(p), filters(p->filters)
 {
 }
 
-MultiGrainBloomFilter::~MultiGrainBloomFilter()
+MultiGrain::~MultiGrain()
 {
 }
 
 void
-MultiGrainBloomFilter::clear()
+MultiGrain::clear()
 {
-    AbstractBloomFilter::clear();
-    for (auto& entry : pageFilter){
-        entry = 0;
+    for (auto& sub_filter : filters) {
+        sub_filter->clear();
     }
 }
 
 void
-MultiGrainBloomFilter::set(Addr addr)
+MultiGrain::merge(const Base* other)
 {
-    const int index = hash(addr);
-    assert(index < filter.size());
-    filter[index] = 1;
-
-    const int page_index = pageHash(addr);
-    assert(page_index < pageFilter.size());
-    pageFilter[page_index] = 1;
-}
-
-int
-MultiGrainBloomFilter::getCount(Addr addr) const
-{
-    const int index = hash(addr);
-    const int page_index = pageHash(addr);
-    assert(index < filter.size());
-    assert(page_index < pageFilter.size());
-    return filter[index] + pageFilter[page_index];
-}
-
-int
-MultiGrainBloomFilter::getTotalCount() const
-{
-    int count = AbstractBloomFilter::getTotalCount();
-
-    for (const auto& entry : pageFilter) {
-        count += entry;
+    auto* cast_other = static_cast<const MultiGrain*>(other);
+    assert(filters.size() == cast_other->filters.size());
+    for (int i = 0; i < filters.size(); ++i){
+        filters[i]->merge(cast_other->filters[i]);
     }
+}
 
+void
+MultiGrain::set(Addr addr)
+{
+    for (auto& sub_filter : filters) {
+        sub_filter->set(addr);
+    }
+}
+
+void
+MultiGrain::unset(Addr addr)
+{
+    for (auto& sub_filter : filters) {
+        sub_filter->unset(addr);
+    }
+}
+
+bool
+MultiGrain::isSet(Addr addr) const
+{
+    int count = 0;
+    for (const auto& sub_filter : filters) {
+        if (sub_filter->isSet(addr)) {
+            count++;
+        }
+    }
+    return count >= setThreshold;
+}
+
+int
+MultiGrain::getCount(Addr addr) const
+{
+    int count = 0;
+    for (const auto& sub_filter : filters) {
+        count += sub_filter->getCount(addr);
+    }
     return count;
 }
 
 int
-MultiGrainBloomFilter::hash(Addr addr) const
+MultiGrain::getTotalCount() const
 {
-    // grap a chunk of bits after byte offset
-    return bits(addr, offsetBits + sizeBits - 1, offsetBits);
+    int count = 0;
+    for (const auto& sub_filter : filters) {
+        count += sub_filter->getTotalCount();
+    }
+    return count;
 }
 
-int
-MultiGrainBloomFilter::pageHash(Addr addr) const
-{
-    int num_bits = offsetBits + sizeBits - 1;
+} // namespace BloomFilter
 
-    // grap a chunk of bits after first chunk
-    return bits(addr, num_bits + pageFilterSizeBits - 1, num_bits);
+BloomFilter::MultiGrain*
+BloomFilterMultiGrainParams::create()
+{
+    return new BloomFilter::MultiGrain(this);
 }
 
-MultiGrainBloomFilter*
-MultiGrainBloomFilterParams::create()
-{
-    return new MultiGrainBloomFilter(this);
-}

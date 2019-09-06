@@ -31,38 +31,49 @@
 
 #include "mem/ruby/filters/AbstractBloomFilter.hh"
 
-struct MultiBitSelBloomFilterParams;
+struct BloomFilterMultiBitSelParams;
 
-class MultiBitSelBloomFilter : public AbstractBloomFilter
+namespace BloomFilter {
+
+/**
+ * The MultiBitSel Bloom Filter associates an address to multiple entries
+ * through the use of multiple hash functions.
+ */
+class MultiBitSel : public Base
 {
   public:
-    MultiBitSelBloomFilter(const MultiBitSelBloomFilterParams* p);
-    ~MultiBitSelBloomFilter();
+    MultiBitSel(const BloomFilterMultiBitSelParams* p);
+    ~MultiBitSel();
 
-    void merge(const AbstractBloomFilter* other) override;
     void set(Addr addr) override;
     int getCount(Addr addr) const override;
 
-  private:
-    int hash(Addr addr, int hash_number) const;
-
-    int hashBitsel(uint64_t value, int index, int jump, int maxBits,
-                    int numBits) const;
+  protected:
+    /**
+     * Apply the selected the hash functions to an address.
+     *
+     * @param addr The address to hash.
+     * @param hash_number Index of the hash function to be used.
+     */
+    virtual int hash(Addr addr, int hash_number) const;
 
     /** Number of hashes. */
     const int numHashes;
-
-    /**
-     * Bit offset from block number. Used to simulate bit selection hashing
-     * on larger than cache-line granularities, by skipping some bits.
-     */
-    const int skipBits;
 
     /** Size of the filter when doing parallel hashing. */
     const int parFilterSize;
 
     /** Whether hashing should be performed in parallel. */
     const bool isParallel;
+
+  private:
+    /**
+     * Bit offset from block number. Used to simulate bit selection hashing
+     * on larger than cache-line granularities, by skipping some bits.
+     */
+    const int skipBits;
 };
+
+} // namespace BloomFilter
 
 #endif // __MEM_RUBY_FILTERS_MULTIBITSELBLOOMFILTER_HH__

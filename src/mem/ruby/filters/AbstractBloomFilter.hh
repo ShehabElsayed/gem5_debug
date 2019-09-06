@@ -36,10 +36,12 @@
 
 #include "base/intmath.hh"
 #include "base/types.hh"
-#include "params/AbstractBloomFilter.hh"
+#include "params/BloomFilterBase.hh"
 #include "sim/sim_object.hh"
 
-class AbstractBloomFilter : public SimObject
+namespace BloomFilter {
+
+class Base : public SimObject
 {
   protected:
     /** Number of LSB bits to ignore from the the addresses. */
@@ -58,13 +60,13 @@ class AbstractBloomFilter : public SimObject
     /**
      * Create and clear the filter.
      */
-    AbstractBloomFilter(const AbstractBloomFilterParams* p)
+    Base(const BloomFilterBaseParams* p)
         : SimObject(p), offsetBits(p->offset_bits), filter(p->size),
           sizeBits(floorLog2(p->size)), setThreshold(p->threshold)
     {
         clear();
     }
-    virtual ~AbstractBloomFilter() {};
+    virtual ~Base() {};
 
     /**
      * Clear the filter by resetting all values.
@@ -76,8 +78,20 @@ class AbstractBloomFilter : public SimObject
         }
     }
 
-    /** Merges the contents of both filters into this'. */
-    virtual void merge(const AbstractBloomFilter* other) {}
+    /**
+     * Merges the contents of both filters into this' (Bloom Filter union).
+     * Both must have the same number of entries.
+     *
+     * @param other The other bloom filter to merge with.
+     */
+    virtual void
+    merge(const Base* other)
+    {
+        assert(filter.size() == other->filter.size());
+        for (int i = 0; i < filter.size(); ++i){
+            filter[i] |= other->filter[i];
+        }
+    }
 
     /**
      * Perform the filter specific function to set the corresponding
@@ -131,5 +145,7 @@ class AbstractBloomFilter : public SimObject
         return count;
     }
 };
+
+} // namespace BloomFilter
 
 #endif // __MEM_RUBY_FILTERS_ABSTRACTBLOOMFILTER_HH__

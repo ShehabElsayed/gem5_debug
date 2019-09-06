@@ -1,5 +1,17 @@
 /*
- * Copyright (c) 1999-2008 Mark D. Hill and David A. Wood
+ * Copyright (c) 2012,2015,2017 ARM Limited
+ * All rights reserved
+ *
+ * The license below extends only to copyright in the software and shall
+ * not be construed as granting a license to any other intellectual
+ * property including but not limited to intellectual property relating
+ * to a hardware implementation of the functionality of the software
+ * licensed hereunder.  You may use the software subject to the license
+ * terms below provided that you ensure that this notice is replicated
+ * unmodified and in its entirety in all distributions of the software,
+ * modified or unmodified, in source code or in binary form.
+ *
+ * Copyright (c) 2002-2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,59 +36,30 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Authors: Steve Reinhardt
+ *          Andreas Hansson
+ *          William Wang
  */
 
-#include "mem/ruby/filters/NonCountingBloomFilter.hh"
+#include "mem/protocol/functional.hh"
 
-#include "base/bitfield.hh"
-#include "params/NonCountingBloomFilter.hh"
-
-NonCountingBloomFilter::NonCountingBloomFilter(
-    const NonCountingBloomFilterParams* p)
-    : AbstractBloomFilter(p), skipBits(p->skip_bits)
-{
-}
-
-NonCountingBloomFilter::~NonCountingBloomFilter()
-{
-}
+/* The request protocol. */
 
 void
-NonCountingBloomFilter::merge(const AbstractBloomFilter *other)
+FunctionalRequestProtocol::send(
+        FunctionalResponseProtocol *peer, PacketPtr pkt) const
 {
-    auto* cast_other = static_cast<const NonCountingBloomFilter*>(other);
-    assert(filter.size() == cast_other->filter.size());
-    for (int i = 0; i < filter.size(); ++i){
-        filter[i] |= cast_other->filter[i];
-    }
+    assert(pkt->isRequest());
+    return peer->recvFunctional(pkt);
 }
+
+/* The response protocol. */
 
 void
-NonCountingBloomFilter::set(Addr addr)
+FunctionalResponseProtocol::sendSnoop(
+        FunctionalRequestProtocol *peer, PacketPtr pkt) const
 {
-    filter[hash(addr)] = 1;
-}
-
-void
-NonCountingBloomFilter::unset(Addr addr)
-{
-    filter[hash(addr)] = 0;
-}
-
-int
-NonCountingBloomFilter::getCount(Addr addr) const
-{
-    return filter[hash(addr)];
-}
-
-int
-NonCountingBloomFilter::hash(Addr addr) const
-{
-    return bits(addr, offsetBits + skipBits + sizeBits - 1, offsetBits + skipBits);
-}
-
-NonCountingBloomFilter*
-NonCountingBloomFilterParams::create()
-{
-    return new NonCountingBloomFilter(this);
+    assert(pkt->isRequest());
+    return peer->recvFunctionalSnoop(pkt);
 }

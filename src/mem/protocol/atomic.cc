@@ -1,5 +1,17 @@
 /*
- * Copyright (c) 1999-2008 Mark D. Hill and David A. Wood
+ * Copyright (c) 2012,2015,2017 ARM Limited
+ * All rights reserved
+ *
+ * The license below extends only to copyright in the software and shall
+ * not be construed as granting a license to any other intellectual
+ * property including but not limited to intellectual property relating
+ * to a hardware implementation of the functionality of the software
+ * licensed hereunder.  You may use the software subject to the license
+ * terms below provided that you ensure that this notice is replicated
+ * unmodified and in its entirety in all distributions of the software,
+ * modified or unmodified, in source code or in binary form.
+ *
+ * Copyright (c) 2002-2005 The Regents of The University of Michigan
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,35 +36,38 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Authors: Steve Reinhardt
+ *          Andreas Hansson
+ *          William Wang
  */
 
-#ifndef __MEM_RUBY_FILTERS_NONCOUNTINGBLOOMFILTER_HH__
-#define __MEM_RUBY_FILTERS_NONCOUNTINGBLOOMFILTER_HH__
+#include "mem/protocol/atomic.hh"
 
-#include "mem/ruby/filters/AbstractBloomFilter.hh"
+#include "base/trace.hh"
 
-struct NonCountingBloomFilterParams;
+/* The request protocol. */
 
-class NonCountingBloomFilter : public AbstractBloomFilter
+Tick
+AtomicRequestProtocol::send(AtomicResponseProtocol *peer, PacketPtr pkt)
 {
-  public:
-    NonCountingBloomFilter(const NonCountingBloomFilterParams* p);
-    ~NonCountingBloomFilter();
+    assert(pkt->isRequest());
+    return peer->recvAtomic(pkt);
+}
 
-    void merge(const AbstractBloomFilter* other) override;
-    void set(Addr addr) override;
-    void unset(Addr addr) override;
+Tick
+AtomicRequestProtocol::sendBackdoor(AtomicResponseProtocol *peer,
+        PacketPtr pkt, MemBackdoorPtr &backdoor)
+{
+    assert(pkt->isRequest());
+    return peer->recvAtomicBackdoor(pkt, backdoor);
+}
 
-    int getCount(Addr addr) const override;
+/* The response protocol. */
 
-  private:
-    int hash(Addr addr) const;
-
-    /**
-     * Bit offset from block number. Used to simulate bit selection hashing
-     * on larger than cache-line granularities, by skipping some bits.
-     */
-    int skipBits;
-};
-
-#endif // __MEM_RUBY_FILTERS_NONCOUNTINGBLOOMFILTER_HH__
+Tick
+AtomicResponseProtocol::sendSnoop(AtomicRequestProtocol *peer, PacketPtr pkt)
+{
+    assert(pkt->isRequest());
+    return peer->recvAtomicSnoop(pkt);
+}
