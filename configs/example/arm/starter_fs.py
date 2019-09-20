@@ -80,7 +80,11 @@ cpu_types = {
     "hpi" : ( HPI.HPI,
               HPI.HPI_ICache, HPI.HPI_DCache,
               HPI.HPI_WalkCache,
-              HPI.HPI_L2)
+              HPI.HPI_L2),
+    "o3" : ( DerivO3CPU,
+             devices.L1I, devices.L1D,
+             devices.WalkCache,
+             devices.L2)
 }
 
 def create_cow_image(name):
