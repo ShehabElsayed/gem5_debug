@@ -74,3 +74,5 @@ def set_usage(*args, **kwargs):
 def print_help(*args, **kwargs):
     parser.print_help(*args, **kwargs)
 
+def get_parser():
+    return parser
