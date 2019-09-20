@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999-2008 Mark D. Hill and David A. Wood
+ * Copyright (c) 2019 Inria
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,42 +24,43 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Authors: Daniel Carvalho
  */
 
-#ifndef __MEM_RUBY_FILTERS_BULKBLOOMFILTER_HH__
-#define __MEM_RUBY_FILTERS_BULKBLOOMFILTER_HH__
+#ifndef __BASE_FILTERS_PERFECT_BLOOM_FILTER_HH__
+#define __BASE_FILTERS_PERFECT_BLOOM_FILTER_HH__
 
-#include <vector>
+#include <unordered_set>
 
-#include "mem/ruby/filters/AbstractBloomFilter.hh"
+#include "base/filters/base.hh"
 
-struct BloomFilterBulkParams;
+struct BloomFilterPerfectParams;
 
 namespace BloomFilter {
 
 /**
- * Implementation of the bloom filter, as described in "Bulk Disambiguation of
- * Speculative Threads in Multiprocessors", by Ceze, Luis, et al.
+ * A perfect bloom filter with no false positives nor false negatives.
  */
-class Bulk : public Base
+class Perfect : public Base
 {
   public:
-    Bulk(const BloomFilterBulkParams* p);
-    ~Bulk();
+    Perfect(const BloomFilterPerfectParams* p);
+    ~Perfect();
 
+    void clear() override;
     void set(Addr addr) override;
+    void unset(Addr addr) override;
 
-    bool isSet(Addr addr) const override;
+    void merge(const Base* other) override;
     int getCount(Addr addr) const override;
+    int getTotalCount() const override;
 
   private:
-    /** Permutes the address to generate its signature. */
-    Addr hash(Addr addr) const;
-
-    // split the filter bits in half, c0 and c1
-    const int sectorBits;
+    /** Container storing all set (seen) entries. */
+    std::unordered_set<Addr> entries;
 };
 
 } // namespace BloomFilter
 
-#endif // __MEM_RUBY_FILTERS_BULKBLOOMFILTER_HH__
+#endif // __BASE_FILTERS_PERFECT_BLOOM_FILTER_HH__

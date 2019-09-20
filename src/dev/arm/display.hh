@@ -1,6 +1,15 @@
 /*
- * Copyright (c) 1999-2008 Mark D. Hill and David A. Wood
- * All rights reserved.
+ * Copyright (c) 2019 ARM Limited
+ * All rights reserved
+ *
+ * The license below extends only to copyright in the software and shall
+ * not be construed as granting a license to any other intellectual
+ * property including but not limited to intellectual property relating
+ * to a hardware implementation of the functionality of the software
+ * licensed hereunder.  You may use the software subject to the license
+ * terms below provided that you ensure that this notice is replicated
+ * unmodified and in its entirety in all distributions of the software,
+ * modified or unmodified, in source code or in binary form.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -24,31 +33,21 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Authors: Giacomo Travaglini
  */
 
-#ifndef __MEM_RUBY_FILTERS_H3BLOOMFILTER_HH__
-#define __MEM_RUBY_FILTERS_H3BLOOMFILTER_HH__
+#ifndef __DEV_ARM_DISPLAY_H__
+#define __DEV_ARM_DISPLAY_H__
 
-#include "mem/ruby/filters/MultiBitSelBloomFilter.hh"
+#include "sim/sim_object.hh"
 
-struct BloomFilterH3Params;
+class DisplayParams;
 
-namespace BloomFilter {
-
-/**
- * Implementation of the bloom filter as described in "Implementing Signatures
- * for Transactional Memory", by Sanchez, Daniel, et al.
- */
-class H3 : public MultiBitSel
+class Display : public SimObject
 {
   public:
-    H3(const BloomFilterH3Params* p);
-    ~H3();
-
-  protected:
-    int hash(Addr addr, int hash_number) const override;
+    Display(const DisplayParams *p);
 };
 
-} // namespace BloomFilter
-
-#endif // __MEM_RUBY_FILTERS_H3BLOOMFILTER_HH__
+#endif // __DEV_ARM_DISPLAY_H__

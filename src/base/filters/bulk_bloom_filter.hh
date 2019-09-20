@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2012 ARM Limited
- * All rights reserved
- *
- * The license below extends only to copyright in the software and shall
- * not be construed as granting a license to any other intellectual
- * property including but not limited to intellectual property relating
- * to a hardware implementation of the functionality of the software
- * licensed hereunder.  You may use the software subject to the license
- * terms below provided that you ensure that this notice is replicated
- * unmodified and in its entirety in all distributions of the software,
- * modified or unmodified, in source code or in binary form.
- *
- * Copyright (c) 2002-2005 The Regents of The University of Michigan
+ * Copyright (c) 2019 Inria
+ * Copyright (c) 1999-2008 Mark D. Hill and David A. Wood
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,31 +26,45 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Ron Dreslinski
- *          Andreas Hansson
+ * Authors: Daniel Carvalho
  */
+
+#ifndef __BASE_FILTERS_BULK_BLOOM_FILTER_HH__
+#define __BASE_FILTERS_BULK_BLOOM_FILTER_HH__
+
+#include "base/filters/multi_bit_sel_bloom_filter.hh"
+
+struct BloomFilterBulkParams;
+
+namespace BloomFilter {
 
 /**
- * @file
- * MemObject declaration.
+ * Implementation of the bloom filter, as described in "Bulk Disambiguation of
+ * Speculative Threads in Multiprocessors", by Ceze, Luis, et al.
+ * The number of hashes indicates the number of c bitfields.
  */
-
-#ifndef __MEM_MEM_OBJECT_HH__
-#define __MEM_MEM_OBJECT_HH__
-
-#include "params/MemObject.hh"
-#include "sim/clocked_object.hh"
-
-/**
- * The MemObject class extends the ClockedObject for historical reasons.
- */
-class MemObject : public ClockedObject
+class Bulk : public MultiBitSel
 {
   public:
-    M5_DEPRECATED_MSG(
-            "MemObject is deprecated. Use ClockedObject or SimObject instead")
-        MemObject(const MemObjectParams *params) : ClockedObject(params)
-    {}
+    Bulk(const BloomFilterBulkParams* p);
+    ~Bulk();
+
+  protected:
+    int hash(Addr addr, int hash_number) const override;
+
+  private:
+    /** Permutes the address to generate its signature. */
+    Addr permute(Addr addr) const;
+
+    /**
+     * Number of bits used per sector. The filter is split into sectors,
+     * each of which with its own hash function. When an address is hashed
+     * all sectors are parsed to generate c indexes. These indexes are then
+     * used to find the respective v indexes in the main filter.
+     */
+    const int sectorBits;
 };
 
-#endif //__MEM_MEM_OBJECT_HH__
+} // namespace BloomFilter
+
+#endif // __BASE_FILTERS_BULK_BLOOM_FILTER_HH__

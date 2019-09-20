@@ -33,7 +33,7 @@ from m5.SimObject import SimObject
 class BloomFilterBase(SimObject):
     type = 'BloomFilterBase'
     abstract = True
-    cxx_header = "mem/ruby/filters/AbstractBloomFilter.hh"
+    cxx_header = "base/filters/base.hh"
     cxx_class = 'BloomFilter::Base'
 
     size = Param.Int(4096, "Number of entries in the filter")
@@ -42,53 +42,43 @@ class BloomFilterBase(SimObject):
     offset_bits = Param.Unsigned(6, "Number of bits in a cache line offset")
 
     # Most of the filters are booleans, and thus saturate on 1
+    num_bits = Param.Int(1, "Number of bits in a filter entry")
     threshold = Param.Int(1, "Value at which an entry is considered as set")
 
 class BloomFilterBlock(BloomFilterBase):
     type = 'BloomFilterBlock'
     cxx_class = 'BloomFilter::Block'
-    cxx_header = "mem/ruby/filters/BlockBloomFilter.hh"
+    cxx_header = "base/filters/block_bloom_filter.hh"
 
     masks_lsbs = VectorParam.Unsigned([Self.offset_bits,
         2 * Self.offset_bits], "Position of the LSB of each mask")
     masks_sizes = VectorParam.Unsigned([Self.offset_bits, Self.offset_bits],
         "Size, in number of bits, of each mask")
 
-class BloomFilterBulk(BloomFilterBase):
-    type = 'BloomFilterBulk'
-    cxx_class = 'BloomFilter::Bulk'
-    cxx_header = "mem/ruby/filters/BulkBloomFilter.hh"
-
-class BloomFilterLSBCounting(BloomFilterBase):
-    type = 'BloomFilterLSBCounting'
-    cxx_class = 'BloomFilter::LSBCounting'
-    cxx_header = "mem/ruby/filters/LSB_CountingBloomFilter.hh"
-
-    # By default use 4-bit saturating counters
-    max_value = Param.Int(15, "Maximum value of the filter entries")
-
-    # We assume that isSet will return true only when the counter saturates
-    threshold = Self.max_value
-
 class BloomFilterMultiBitSel(BloomFilterBase):
     type = 'BloomFilterMultiBitSel'
     cxx_class = 'BloomFilter::MultiBitSel'
-    cxx_header = "mem/ruby/filters/MultiBitSelBloomFilter.hh"
+    cxx_header = "base/filters/multi_bit_sel_bloom_filter.hh"
 
     num_hashes = Param.Int(4, "Number of hashes")
     threshold = Self.num_hashes
     skip_bits = Param.Int(2, "Offset from block number")
     is_parallel = Param.Bool(False, "Whether hashing is done in parallel")
 
+class BloomFilterBulk(BloomFilterMultiBitSel):
+    type = 'BloomFilterBulk'
+    cxx_class = 'BloomFilter::Bulk'
+    cxx_header = "base/filters/bulk_bloom_filter.hh"
+
 class BloomFilterH3(BloomFilterMultiBitSel):
     type = 'BloomFilterH3'
     cxx_class = 'BloomFilter::H3'
-    cxx_header = "mem/ruby/filters/H3BloomFilter.hh"
+    cxx_header = "base/filters/h3_bloom_filter.hh"
 
-class BloomFilterMultiGrain(BloomFilterBase):
-    type = 'BloomFilterMultiGrain'
-    cxx_class = 'BloomFilter::MultiGrain'
-    cxx_header = "mem/ruby/filters/MultiGrainBloomFilter.hh"
+class BloomFilterMulti(BloomFilterBase):
+    type = 'BloomFilterMulti'
+    cxx_class = 'BloomFilter::Multi'
+    cxx_header = "base/filters/multi_bloom_filter.hh"
 
     # The base filter should not be used, since this filter is the combination
     # of multiple sub-filters, so we use a dummy value
@@ -102,3 +92,11 @@ class BloomFilterMultiGrain(BloomFilterBase):
 
     # By default match this with the number of sub-filters
     threshold = 2
+
+class BloomFilterPerfect(BloomFilterBase):
+    type = 'BloomFilterPerfect'
+    cxx_class = 'BloomFilter::Perfect'
+    cxx_header = "base/filters/perfect_bloom_filter.hh"
+
+    # The base filter is not needed. Use a dummy value.
+    size = 1

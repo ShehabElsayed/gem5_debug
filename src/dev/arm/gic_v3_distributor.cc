@@ -44,6 +44,7 @@
 
 #include <algorithm>
 
+#include "base/intmath.hh"
 #include "debug/GIC.hh"
 #include "dev/arm/gic_v3.hh"
 #include "dev/arm/gic_v3_cpu_interface.hh"
@@ -68,15 +69,20 @@ const AddrRange Gicv3Distributor::GICD_IROUTER   (0x6000, 0x7fe0);
 Gicv3Distributor::Gicv3Distributor(Gicv3 * gic, uint32_t it_lines)
     : gic(gic),
       itLines(it_lines),
-      irqGroup(it_lines),
-      irqEnabled(it_lines),
-      irqPending(it_lines),
-      irqActive(it_lines),
-      irqPriority(it_lines),
-      irqConfig(it_lines),
-      irqGrpmod(it_lines),
-      irqNsacr(it_lines),
-      irqAffinityRouting(it_lines),
+      ARE(true),
+      EnableGrp1S(0),
+      EnableGrp1NS(0),
+      EnableGrp0(0),
+      irqGroup(it_lines, 0),
+      irqEnabled(it_lines, false),
+      irqPending(it_lines, false),
+      irqActive(it_lines, false),
+      irqPriority(it_lines, 0xAA),
+      irqConfig(it_lines, Gicv3::INT_LEVEL_SENSITIVE),
+      irqGrpmod(it_lines, 0),
+      irqNsacr(it_lines, 0),
+      irqAffinityRouting(it_lines, 0),
+      gicdTyper(0),
       gicdPidr0(0x92),
       gicdPidr1(0xb4),
       gicdPidr2(0x3b),
@@ -84,48 +90,48 @@ Gicv3Distributor::Gicv3Distributor(Gicv3 * gic, uint32_t it_lines)
       gicdPidr4(0x44)
 {
     panic_if(it_lines > Gicv3::INTID_SECURE, "Invalid value for it_lines!");
-}
-
-void
-Gicv3Distributor::init()
-{
-}
-
-void
-Gicv3Distributor::initState()
-{
-    reset();
-}
-
-void
-Gicv3Distributor::reset()
-{
-    std::fill(irqGroup.begin(), irqGroup.end(), 0);
-    // Imp. defined reset value
-    std::fill(irqEnabled.begin(), irqEnabled.end(), false);
-    std::fill(irqPending.begin(), irqPending.end(), false);
-    std::fill(irqActive.begin(), irqActive.end(), false);
-    // Imp. defined reset value
-    std::fill(irqPriority.begin(), irqPriority.end(), 0xAAAAAAAA);
-    std::fill(irqConfig.begin(), irqConfig.end(),
-              Gicv3::INT_LEVEL_SENSITIVE); // Imp. defined reset value
-    std::fill(irqGrpmod.begin(), irqGrpmod.end(), 0);
-    std::fill(irqNsacr.begin(), irqNsacr.end(), 0);
     /*
-     * For our implementation affinity routing is always enabled,
-     * no GICv2 legacy
+     * RSS           [26]    == 1
+     * (The implementation does supports targeted SGIs with affinity
+     * level 0 values of 0 - 255)
+     * No1N          [25]    == 1
+     * (1 of N SPI interrupts are not supported)
+     * A3V           [24]    == 1
+     * (Supports nonzero values of Affinity level 3)
+     * IDbits        [23:19] == 0xf
+     * (The number of interrupt identifier bits supported, minus one)
+     * DVIS          [18]    == 0
+     * (The implementation does not support Direct Virtual LPI
+     * injection)
+     * LPIS          [17]    == 1
+     * (The implementation does not support LPIs)
+     * MBIS          [16]    == 1
+     * (The implementation supports message-based interrupts
+     * by writing to Distributor registers)
+     * SecurityExtn  [10]    == X
+     * (The GIC implementation supports two Security states)
+     * CPUNumber     [7:5]   == 0
+     * (since for us ARE is always 1 [(ARE = 0) == Gicv2 legacy])
+     * ITLinesNumber [4:0]   == N
+     * (MaxSPIIntId = 32 (N + 1) - 1)
      */
-    ARE = true;
+    int max_spi_int_id = itLines - 1;
+    int it_lines_number = divCeil(max_spi_int_id + 1, 32) - 1;
+    gicdTyper = (1 << 26) | (1 << 25) | (1 << 24) | (IDBITS << 19) |
+        (1 << 17) | (1 << 16) |
+        ((gic->getSystem()->haveSecurity() ? 1 : 0) << 10) |
+        (it_lines_number << 0);
 
     if (gic->getSystem()->haveSecurity()) {
         DS = false;
     } else {
         DS = true;
     }
+}
 
-    EnableGrp0 = 0;
-    EnableGrp1NS = 0;
-    EnableGrp1S = 0;
+void
+Gicv3Distributor::init()
+{
 }
 
 uint64_t
@@ -461,38 +467,7 @@ Gicv3Distributor::read(Addr addr, size_t size, bool is_secure_access)
         }
 
       case GICD_TYPER: // Interrupt Controller Type Register
-        /*
-         * RSS           [26]    == 1
-         * (The implementation does supports targeted SGIs with affinity
-         * level 0 values of 0 - 255)
-         * No1N          [25]    == 1
-         * (1 of N SPI interrupts are not supported)
-         * A3V           [24]    == 1
-         * (Supports nonzero values of Affinity level 3)
-         * IDbits        [23:19] == 0xf
-         * (The number of interrupt identifier bits supported, minus one)
-         * DVIS          [18]    == 0
-         * (The implementation does not support Direct Virtual LPI
-         * injection)
-         * LPIS          [17]    == 1
-         * (The implementation does not support LPIs)
-         * MBIS          [16]    == 0
-         * (The implementation does not support message-based interrupts
-         * by writing to Distributor registers)
-         * SecurityExtn  [10]    == X
-         * (The GIC implementation supports two Security states)
-         * CPUNumber     [7:5]   == 0
-         * (since for us ARE is always 1 [(ARE = 0) == Gicv2 legacy])
-         * ITLinesNumber [4:0]   == N
-         * (MaxSPIIntId = 32 (N + 1) - 1)
-         */
-        {
-            int max_spi_int_id = itLines - 1;
-            int it_lines_number = ceil((max_spi_int_id + 1) / 32.0) - 1;
-            return (1 << 26) | (1 << 25) | (1 << 24) | (IDBITS << 19) |
-                (1 << 17) | (gic->getSystem()->haveSecurity() << 10) |
-                (it_lines_number << 0);
-        }
+        return gicdTyper;
 
       case GICD_IIDR: // Implementer Identification Register
         //return 0x43b; // ARM JEP106 code (r0p0 GIC-500)
@@ -936,6 +911,80 @@ Gicv3Distributor::write(Addr addr, uint64_t data, size_t size,
 
         break;
 
+      case GICD_SGIR: // Error Reporting Status Register
+        // Only if affinity routing is disabled, RES0
+        break;
+
+      case GICD_SETSPI_NSR: {
+        // Writes to this register have no effect if:
+        // * The value written specifies an invalid SPI.
+        // * The SPI is already pending.
+        // * The value written specifies a Secure SPI, the value is
+        // written by a Non-secure access, and the value of the
+        // corresponding GICD_NSACR<n> register is 0.
+        const uint32_t intid = bits(data, 9, 0);
+        if (isNotSPI(intid) || irqPending[intid] ||
+            (nsAccessToSecInt(intid, is_secure_access) &&
+             irqNsacr[intid] == 0)) {
+            return;
+        } else {
+            // Valid SPI, set interrupt pending
+            sendInt(intid);
+        }
+        break;
+      }
+
+      case GICD_CLRSPI_NSR: {
+        // Writes to this register have no effect if:
+        // * The value written specifies an invalid SPI.
+        // * The SPI is not pending.
+        // * The value written specifies a Secure SPI, the value is
+        // written by a Non-secure access, and the value of the
+        // corresponding GICD_NSACR<n> register is less than 0b10.
+        const uint32_t intid = bits(data, 9, 0);
+        if (isNotSPI(intid) || !irqPending[intid] ||
+            (nsAccessToSecInt(intid, is_secure_access) &&
+             irqNsacr[intid] < 2)) {
+            return;
+        } else {
+            // Valid SPI, clear interrupt pending
+            deassertSPI(intid);
+        }
+        break;
+      }
+
+      case GICD_SETSPI_SR: {
+        // Writes to this register have no effect if:
+        // * GICD_CTLR.DS = 1 (WI)
+        // * The value written specifies an invalid SPI.
+        // * The SPI is already pending.
+        // * The value is written by a Non-secure access.
+        const uint32_t intid = bits(data, 9, 0);
+        if (DS || isNotSPI(intid) || irqPending[intid] || !is_secure_access) {
+            return;
+        } else {
+            // Valid SPI, set interrupt pending
+            sendInt(intid);
+        }
+        break;
+      }
+
+      case GICD_CLRSPI_SR: {
+        // Writes to this register have no effect if:
+        // * GICD_CTLR.DS = 1 (WI)
+        // * The value written specifies an invalid SPI.
+        // * The SPI is not pending.
+        // * The value is written by a Non-secure access.
+        const uint32_t intid = bits(data, 9, 0);
+        if (DS || isNotSPI(intid) || !irqPending[intid] || !is_secure_access) {
+            return;
+        } else {
+            // Valid SPI, clear interrupt pending
+            deassertSPI(intid);
+        }
+        break;
+      }
+
       default:
         panic("Gicv3Distributor::write(): invalid offset %#x\n", addr);
         break;
@@ -1006,7 +1055,7 @@ Gicv3Distributor::clearIrqCpuInterface(uint32_t int_id)
 {
     auto cpu_interface = route(int_id);
     if (cpu_interface)
-        cpu_interface->hppi.prio = 0xff;
+        cpu_interface->resetHppi(int_id);
 }
 
 void

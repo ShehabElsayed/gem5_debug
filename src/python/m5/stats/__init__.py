@@ -47,6 +47,7 @@ import m5
 
 import _m5.stats
 from m5.objects import Root
+from m5.params import isNullPointer
 from m5.util import attrdict, fatal
 
 # Stat exports
@@ -253,11 +254,25 @@ def _visit_stats(visitor, root=None):
 
 def _bindStatHierarchy(root):
     def _bind_obj(name, obj):
+        if isNullPointer(obj):
+            return
         if m5.SimObject.isSimObjectVector(obj):
             for idx, obj in enumerate(obj):
                 _bind_obj("{}{}".format(name, idx), obj)
         else:
-            root.addStatGroup(name, obj.getCCObject())
+            # We need this check because not all obj.getCCObject() is an
+            # instance of Stat::Group. For example, sc_core::sc_module, the C++
+            # class of SystemC_ScModule, is not a subclass of Stat::Group. So
+            # it will cause a type error if obj is a SystemC_ScModule when
+            # calling addStatGroup().
+            if isinstance(obj.getCCObject(), _m5.stats.Group):
+                parent = root
+                while parent:
+                    if hasattr(parent, 'addStatGroup'):
+                        parent.addStatGroup(name, obj.getCCObject())
+                        break
+                    parent = parent.get_parent();
+
             _bindStatHierarchy(obj)
 
     for name, obj in root._children.items():

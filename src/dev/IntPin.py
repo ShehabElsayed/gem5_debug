@@ -1,6 +1,4 @@
-# -*- coding: utf-8 -*-
-# Copyright (c) 2017 Jason Lowe-Power
-# All rights reserved.
+# Copyright 2019 Google, Inc.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are
@@ -25,15 +23,30 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-# Authors: Jason Lowe-Power
+# Authors: Gabe Black
 
-from m5.params import *
-from m5.SimObject import SimObject
+from m5.params import Port, VectorPort
 
-class SimpleMemobj(SimObject):
-    type = 'SimpleMemobj'
-    cxx_header = "learning_gem5/part2/simple_memobj.hh"
+INT_SOURCE_ROLE = 'Int Source Pin'
+INT_SINK_ROLE = 'Int Sink Pin'
+Port.compat(INT_SOURCE_ROLE, INT_SINK_ROLE)
 
-    inst_port = SlavePort("CPU side port, receives requests")
-    data_port = SlavePort("CPU side port, receives requests")
-    mem_side = MasterPort("Memory side port, sends requests")
+# A source pin generally represents a single pin which might connect to
+# multiple sinks.
+class IntSourcePin(VectorPort):
+    def __init__(self, desc):
+        super(IntSourcePin, self).__init__(
+                INT_SOURCE_ROLE, desc, is_source=True)
+
+# Each "physical" pin can be driven by a single source pin since there are no
+# provisions for resolving competing signals running to the same pin.
+class IntSinkPin(Port):
+    def __init__(self, desc):
+        super(IntSinkPin, self).__init__(INT_SINK_ROLE, desc)
+
+# A vector of sink pins represents a bank of physical pins. For instance, an
+# interrupt controller with many numbered input interrupts could represent them
+# as a VectorIntSinkPin.
+class VectorIntSinkPin(VectorPort):
+    def __init__(self, desc):
+        super(VectorIntSinkPin, self).__init__(INT_SINK_ROLE, desc)

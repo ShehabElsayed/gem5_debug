@@ -1075,6 +1075,12 @@ snsBankedIndex(MiscRegIndex reg, ThreadContext *tc, bool ns)
     return reg_as_int;
 }
 
+int
+snsBankedIndex64(MiscRegIndex reg, ThreadContext *tc)
+{
+    SCR scr = tc->readMiscReg(MISCREG_SCR);
+    return tc->getIsaPtr()->snsBankedIndex64(reg, scr.ns);
+}
 
 /**
  * If the reg is a child reg of a banked set, then the parent is the last
@@ -4527,7 +4533,7 @@ ISA::initializeMiscRegMetadata()
         .allPrivileges().exceptUserMode()
         .mapsTo(MISCREG_ICC_AP0R3);
     InitReg(MISCREG_ICC_AP1R0_EL1)
-        .banked()
+        .banked64()
         .mapsTo(MISCREG_ICC_AP1R0);
     InitReg(MISCREG_ICC_AP1R0_EL1_NS)
         .bankedChild()
@@ -4538,7 +4544,7 @@ ISA::initializeMiscRegMetadata()
         .allPrivileges().exceptUserMode()
         .mapsTo(MISCREG_ICC_AP1R0_S);
     InitReg(MISCREG_ICC_AP1R1_EL1)
-        .banked()
+        .banked64()
         .mapsTo(MISCREG_ICC_AP1R1);
     InitReg(MISCREG_ICC_AP1R1_EL1_NS)
         .bankedChild()
@@ -4549,7 +4555,7 @@ ISA::initializeMiscRegMetadata()
         .allPrivileges().exceptUserMode()
         .mapsTo(MISCREG_ICC_AP1R1_S);
     InitReg(MISCREG_ICC_AP1R2_EL1)
-        .banked()
+        .banked64()
         .mapsTo(MISCREG_ICC_AP1R2);
     InitReg(MISCREG_ICC_AP1R2_EL1_NS)
         .bankedChild()
@@ -4560,7 +4566,7 @@ ISA::initializeMiscRegMetadata()
         .allPrivileges().exceptUserMode()
         .mapsTo(MISCREG_ICC_AP1R2_S);
     InitReg(MISCREG_ICC_AP1R3_EL1)
-        .banked()
+        .banked64()
         .mapsTo(MISCREG_ICC_AP1R3);
     InitReg(MISCREG_ICC_AP1R3_EL1_NS)
         .bankedChild()
@@ -4597,7 +4603,7 @@ ISA::initializeMiscRegMetadata()
         .allPrivileges().exceptUserMode().writes(0)
         .mapsTo(MISCREG_ICC_HPPIR1);
     InitReg(MISCREG_ICC_BPR1_EL1)
-        .banked()
+        .banked64()
         .mapsTo(MISCREG_ICC_BPR1);
     InitReg(MISCREG_ICC_BPR1_EL1_NS)
         .bankedChild()
@@ -4610,7 +4616,7 @@ ISA::initializeMiscRegMetadata()
         .secure().exceptUserMode()
         .mapsTo(MISCREG_ICC_BPR1_S);
     InitReg(MISCREG_ICC_CTLR_EL1)
-        .banked()
+        .banked64()
         .mapsTo(MISCREG_ICC_CTLR);
     InitReg(MISCREG_ICC_CTLR_EL1_NS)
         .bankedChild()
@@ -4640,7 +4646,7 @@ ISA::initializeMiscRegMetadata()
         .allPrivileges().exceptUserMode()
         .mapsTo(MISCREG_ICC_IGRPEN0);
     InitReg(MISCREG_ICC_IGRPEN1_EL1)
-        .banked()
+        .banked64()
         .mapsTo(MISCREG_ICC_IGRPEN1);
     InitReg(MISCREG_ICC_IGRPEN1_EL1_NS)
         .bankedChild()

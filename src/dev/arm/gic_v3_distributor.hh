@@ -69,6 +69,16 @@ class Gicv3Distributor : public Serializable
         GICD_IIDR = 0x0008,
         // Error Reporting Status Register
         GICD_STATUSR = 0x0010,
+        // Set Non-secure SPI Pending Register
+        GICD_SETSPI_NSR = 0x0040,
+        // Clear Non-secure SPI Pending Register
+        GICD_CLRSPI_NSR = 0x0048,
+        // Set Secure SPI Pending Register
+        GICD_SETSPI_SR = 0x0050,
+        // Clear Secure SPI Pending Register
+        GICD_CLRSPI_SR = 0x0058,
+        // Software Generated Interrupt Register
+        GICD_SGIR = 0x0f00,
         // Peripheral ID0 Register
         GICD_PIDR0 = 0xffe0,
         // Peripheral ID1 Register
@@ -150,6 +160,7 @@ class Gicv3Distributor : public Serializable
     std::vector <uint8_t> irqNsacr;
     std::vector <IROUTER> irqAffinityRouting;
 
+    uint32_t gicdTyper;
     uint32_t gicdPidr0;
     uint32_t gicdPidr1;
     uint32_t gicdPidr2;
@@ -218,7 +229,6 @@ class Gicv3Distributor : public Serializable
         return !DS && !is_secure_access && getIntGroup(int_id) != Gicv3::G1NS;
     }
 
-    void reset();
     void serialize(CheckpointOut & cp) const override;
     void unserialize(CheckpointIn & cp) override;
     void update();
@@ -231,7 +241,6 @@ class Gicv3Distributor : public Serializable
     void deassertSPI(uint32_t int_id);
     void clearIrqCpuInterface(uint32_t int_id);
     void init();
-    void initState();
     uint64_t read(Addr addr, size_t size, bool is_secure_access);
     void sendInt(uint32_t int_id);
     void write(Addr addr, uint64_t data, size_t size,

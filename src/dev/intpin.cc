@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 1999-2008 Mark D. Hill and David A. Wood
- * All rights reserved.
+ * Copyright 2019 Google, Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -24,36 +23,47 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Authors: Gabe Black
  */
 
-#ifndef __MEM_RUBY_FILTERS_LSB_COUNTINGBLOOMFILTER_HH__
-#define __MEM_RUBY_FILTERS_LSB_COUNTINGBLOOMFILTER_HH__
+#include "dev/intpin.hh"
 
-#include "mem/ruby/filters/AbstractBloomFilter.hh"
+#include "base/logging.hh"
 
-struct BloomFilterLSBCountingParams;
-
-namespace BloomFilter {
-
-class LSBCounting : public Base
+void
+IntSinkPinBase::bind(Port &peer)
 {
-  public:
-    LSBCounting(const BloomFilterLSBCountingParams* p);
-    ~LSBCounting();
+    source = dynamic_cast<IntSourcePinBase *>(&peer);
+    fatal_if(!source, "Attempt to bind interrupt sink pin %s to "
+            "incompatible port %s.", name(), peer.name());
+    Port::bind(peer);
+}
 
-    void merge(const Base* other) override;
-    void set(Addr addr) override;
-    void unset(Addr addr) override;
+void
+IntSinkPinBase::unbind()
+{
+    source = nullptr;
+    Port::unbind();
+}
 
-    int getCount(Addr addr) const override;
+void
+IntSourcePinBase::bind(Port &peer)
+{
+    sink = dynamic_cast<IntSinkPinBase *>(&peer);
+    fatal_if(!sink, "Attempt to bind interrupt source pin %s to "
+            "incompatible port %s.", name(), peer.name());
+    Port::bind(peer);
 
-  private:
-    int hash(Addr addr) const;
+    if (_state)
+        raise();
+    else
+        lower();
+}
 
-    /** Maximum value of the filter entries. */
-    const int maxValue;
-};
-
-} // namespace BloomFilter
-
-#endif //__MEM_RUBY_FILTERS_LSB_COUNTINGBLOOMFILTER_HH__
+void
+IntSourcePinBase::unbind()
+{
+    sink = nullptr;
+    Port::unbind();
+}

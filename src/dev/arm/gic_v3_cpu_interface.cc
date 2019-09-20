@@ -58,6 +58,8 @@ Gicv3CPUInterface::Gicv3CPUInterface(Gicv3 * gic, uint32_t cpu_id)
       distributor(nullptr),
       cpuId(cpu_id)
 {
+    hppi.prio = 0xff;
+    hppi.intid = Gicv3::INTID_SPURIOUS;
 }
 
 void
@@ -68,15 +70,10 @@ Gicv3CPUInterface::init()
 }
 
 void
-Gicv3CPUInterface::initState()
+Gicv3CPUInterface::resetHppi(uint32_t intid)
 {
-    reset();
-}
-
-void
-Gicv3CPUInterface::reset()
-{
-    hppi.prio = 0xff;
+    if (intid == hppi.intid)
+        hppi.prio = 0xff;
 }
 
 void
@@ -128,7 +125,7 @@ Gicv3CPUInterface::readMiscReg(int misc_reg)
               return isa->readMiscRegNoEffect(MISCREG_ICV_AP1R0_EL1);
           }
 
-          break;
+          return readBankedMiscReg(MISCREG_ICC_AP1R0_EL1);
       }
 
       case MISCREG_ICC_AP1R1:
@@ -191,6 +188,7 @@ Gicv3CPUInterface::readMiscReg(int misc_reg)
               return readMiscReg(MISCREG_ICV_IGRPEN1_EL1);
           }
 
+          value = readBankedMiscReg(MISCREG_ICC_IGRPEN1_EL1);
           break;
       }
 
@@ -203,8 +201,17 @@ Gicv3CPUInterface::readMiscReg(int misc_reg)
 
       // Interrupt Group 1 Enable register EL3
       case MISCREG_ICC_MGRPEN1:
-      case MISCREG_ICC_IGRPEN1_EL3:
+      case MISCREG_ICC_IGRPEN1_EL3: {
+          ICC_IGRPEN1_EL3 igrp_el3 = 0;
+          igrp_el3.EnableGrp1S = ((ICC_IGRPEN1_EL1)isa->readMiscRegNoEffect(
+              MISCREG_ICC_IGRPEN1_EL1_S)).Enable;
+
+          igrp_el3.EnableGrp1NS = ((ICC_IGRPEN1_EL1)isa->readMiscRegNoEffect(
+              MISCREG_ICC_IGRPEN1_EL1_NS)).Enable;
+
+          value = igrp_el3;
           break;
+      }
 
       // Running Priority Register
       case MISCREG_ICC_RPR:
@@ -553,6 +560,7 @@ Gicv3CPUInterface::readMiscReg(int misc_reg)
               return readMiscReg(MISCREG_ICV_CTLR_EL1);
           }
 
+          value = readBankedMiscReg(MISCREG_ICC_CTLR_EL1);
           // Enforce value for RO bits
           // ExtRange [19], INTIDs in the range 1024..8191 not supported
           // RSS [18], SGIs with affinity level 0 values of 0-255 are supported
@@ -739,7 +747,8 @@ Gicv3CPUInterface::setMiscReg(int misc_reg, RegVal val)
             return isa->setMiscRegNoEffect(MISCREG_ICV_AP1R0_EL1, val);
         }
 
-        break;
+        setBankedMiscReg(MISCREG_ICC_AP1R0_EL1, val);
+        return;
 
       case MISCREG_ICC_AP1R1:
       case MISCREG_ICC_AP1R1_EL1:
@@ -1132,7 +1141,7 @@ Gicv3CPUInterface::setMiscReg(int misc_reg, RegVal val)
            */
           ICC_CTLR_EL1 requested_icc_ctlr_el1 = val;
           ICC_CTLR_EL1 icc_ctlr_el1 =
-              isa->readMiscRegNoEffect(MISCREG_ICC_CTLR_EL1);
+              readBankedMiscReg(MISCREG_ICC_CTLR_EL1);
 
           ICC_CTLR_EL3 icc_ctlr_el3 =
               isa->readMiscRegNoEffect(MISCREG_ICC_CTLR_EL3);
@@ -1190,8 +1199,8 @@ Gicv3CPUInterface::setMiscReg(int misc_reg, RegVal val)
 
           isa->setMiscRegNoEffect(MISCREG_ICC_CTLR_EL3, icc_ctlr_el3);
 
-          val = icc_ctlr_el1;
-          break;
+          setBankedMiscReg(MISCREG_ICC_CTLR_EL1, icc_ctlr_el1);
+          return;
       }
 
       // Virtual Control Register
@@ -1318,7 +1327,9 @@ Gicv3CPUInterface::setMiscReg(int misc_reg, RegVal val)
               return setMiscReg(MISCREG_ICV_IGRPEN0_EL1, val);
           }
 
-          break;
+          isa->setMiscRegNoEffect(MISCREG_ICC_IGRPEN0_EL1, val);
+          updateDistributor();
+          return;
       }
 
       // Virtual Interrupt Group 0 Enable register
@@ -1339,24 +1350,9 @@ Gicv3CPUInterface::setMiscReg(int misc_reg, RegVal val)
               return setMiscReg(MISCREG_ICV_IGRPEN1_EL1, val);
           }
 
-          if (haveEL(EL3)) {
-              ICC_IGRPEN1_EL1 icc_igrpen1_el1 = val;
-              ICC_IGRPEN1_EL3 icc_igrpen1_el3 =
-                  isa->readMiscRegNoEffect(MISCREG_ICC_IGRPEN1_EL3);
-
-              if (inSecureState()) {
-                  // Enable is RW alias of ICC_IGRPEN1_EL3.EnableGrp1S
-                  icc_igrpen1_el3.EnableGrp1S = icc_igrpen1_el1.Enable;
-              } else {
-                  // Enable is RW alias of ICC_IGRPEN1_EL3.EnableGrp1NS
-                  icc_igrpen1_el3.EnableGrp1NS = icc_igrpen1_el1.Enable;
-              }
-
-              isa->setMiscRegNoEffect(MISCREG_ICC_IGRPEN1_EL3,
-                                      icc_igrpen1_el3);
-          }
-
-          break;
+          setBankedMiscReg(MISCREG_ICC_IGRPEN1_EL1, val);
+          updateDistributor();
+          return;
       }
 
       // Virtual Interrupt Group 1 Enable register
@@ -1374,19 +1370,13 @@ Gicv3CPUInterface::setMiscReg(int misc_reg, RegVal val)
       case MISCREG_ICC_MGRPEN1:
       case MISCREG_ICC_IGRPEN1_EL3: {
           ICC_IGRPEN1_EL3 icc_igrpen1_el3 = val;
-          ICC_IGRPEN1_EL1 icc_igrpen1_el1 =
-              isa->readMiscRegNoEffect(MISCREG_ICC_IGRPEN1_EL1);
 
-          if (inSecureState()) {
-              // ICC_IGRPEN1_EL1.Enable is RW alias of EnableGrp1S
-              icc_igrpen1_el1.Enable = icc_igrpen1_el3.EnableGrp1S;
-          } else {
-              // ICC_IGRPEN1_EL1.Enable is RW alias of EnableGrp1NS
-              icc_igrpen1_el1.Enable = icc_igrpen1_el3.EnableGrp1NS;
-          }
-
-          isa->setMiscRegNoEffect(MISCREG_ICC_IGRPEN1_EL1, icc_igrpen1_el1);
-          break;
+          isa->setMiscRegNoEffect(
+              MISCREG_ICC_IGRPEN1_EL1_S, icc_igrpen1_el3.EnableGrp1S);
+          isa->setMiscRegNoEffect(
+              MISCREG_ICC_IGRPEN1_EL1_NS, icc_igrpen1_el3.EnableGrp1NS);
+          updateDistributor();
+          return;
       }
 
       // Software Generated Interrupt Group 0 Register
@@ -1623,6 +1613,20 @@ Gicv3CPUInterface::setMiscReg(int misc_reg, RegVal val)
     }
 }
 
+RegVal
+Gicv3CPUInterface::readBankedMiscReg(MiscRegIndex misc_reg) const
+{
+    return isa->readMiscRegNoEffect(
+        isa->snsBankedIndex64(misc_reg, !isSecureBelowEL3()));
+}
+
+void
+Gicv3CPUInterface::setBankedMiscReg(MiscRegIndex misc_reg, RegVal val) const
+{
+    isa->setMiscRegNoEffect(
+        isa->snsBankedIndex64(misc_reg, !isSecureBelowEL3()), val);
+}
+
 int
 Gicv3CPUInterface::virtualFindActive(uint32_t int_id) const
 {
@@ -1704,11 +1708,23 @@ Gicv3CPUInterface::getHPPIR1() const
 void
 Gicv3CPUInterface::dropPriority(Gicv3::GroupId group)
 {
-    int apr_misc_reg;
-    RegVal apr;
-    apr_misc_reg = group == Gicv3::G0S ?
-                   MISCREG_ICC_AP0R0_EL1 : MISCREG_ICC_AP1R0_EL1;
-    apr = isa->readMiscRegNoEffect(apr_misc_reg);
+    int apr_misc_reg = 0;
+
+    switch (group) {
+      case Gicv3::G0S:
+        apr_misc_reg = MISCREG_ICC_AP0R0_EL1;
+        break;
+      case Gicv3::G1S:
+        apr_misc_reg = MISCREG_ICC_AP1R0_EL1_S;
+        break;
+      case Gicv3::G1NS:
+        apr_misc_reg = MISCREG_ICC_AP1R0_EL1_NS;
+        break;
+      default:
+        panic("Invalid Gicv3::GroupId");
+    }
+
+    RegVal apr = isa->readMiscRegNoEffect(apr_misc_reg);
 
     if (apr) {
         apr &= apr - 1;
@@ -1799,8 +1815,22 @@ Gicv3CPUInterface::activateIRQ(uint32_t int_id, Gicv3::GroupId group)
     uint32_t prio = hppi.prio & 0xf8;
     int apr_bit = prio >> (8 - PRIORITY_BITS);
     int reg_bit = apr_bit % 32;
-    int apr_idx = group == Gicv3::G0S ?
-                 MISCREG_ICC_AP0R0_EL1 : MISCREG_ICC_AP1R0_EL1;
+
+    int apr_idx = 0;
+    switch (group) {
+      case Gicv3::G0S:
+        apr_idx = MISCREG_ICC_AP0R0_EL1;
+        break;
+      case Gicv3::G1S:
+        apr_idx = MISCREG_ICC_AP1R0_EL1_S;
+        break;
+      case Gicv3::G1NS:
+        apr_idx = MISCREG_ICC_AP1R0_EL1_NS;
+        break;
+      default:
+        panic("Invalid Gicv3::GroupId");
+    }
+
     RegVal apr = isa->readMiscRegNoEffect(apr_idx);
     apr |= (1 << reg_bit);
     isa->setMiscRegNoEffect(apr_idx, apr);
@@ -1820,7 +1850,7 @@ Gicv3CPUInterface::activateIRQ(uint32_t int_id, Gicv3::GroupId group)
     // By setting the priority to 0xff we are effectively
     // making the int_id not pending anymore at the cpu
     // interface.
-    hppi.prio = 0xff;
+    resetHppi(int_id);
     updateDistributor();
 }
 
@@ -1949,8 +1979,11 @@ Gicv3CPUInterface::isEOISplitMode() const
             isa->readMiscRegNoEffect(MISCREG_ICC_CTLR_EL3);
         return icc_ctlr_el3.EOImode_EL3;
     } else {
-        ICC_CTLR_EL1 icc_ctlr_el1 =
-            isa->readMiscRegNoEffect(MISCREG_ICC_CTLR_EL1);
+        ICC_CTLR_EL1 icc_ctlr_el1 = 0;
+        if (inSecureState())
+            icc_ctlr_el1 = isa->readMiscRegNoEffect(MISCREG_ICC_CTLR_EL1_S);
+        else
+            icc_ctlr_el1 = isa->readMiscRegNoEffect(MISCREG_ICC_CTLR_EL1_NS);
         return icc_ctlr_el1.EOImode;
     }
 }

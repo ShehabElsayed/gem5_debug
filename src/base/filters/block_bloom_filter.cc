@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2019 Inria
  * Copyright (c) 1999-2008 Mark D. Hill and David A. Wood
  * All rights reserved.
  *
@@ -24,49 +25,77 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Authors: Daniel Carvalho
  */
 
-#ifndef __MEM_RUBY_FILTERS_BLOCKBLOOMFILTER_HH__
-#define __MEM_RUBY_FILTERS_BLOCKBLOOMFILTER_HH__
+#include "base/filters/block_bloom_filter.hh"
 
-#include <vector>
-
-#include "mem/ruby/filters/AbstractBloomFilter.hh"
-
-struct BloomFilterBlockParams;
+#include "base/bitfield.hh"
+#include "base/logging.hh"
+#include "params/BloomFilterBlock.hh"
 
 namespace BloomFilter {
 
-/**
- * Simple deletable (with false negatives) bloom filter that extracts
- * bitfields of an address to use as indexes of the filter vector.
- */
-class Block : public Base
+Block::Block(const BloomFilterBlockParams* p)
+    : Base(p), masksLSBs(p->masks_lsbs),
+      masksSizes(p->masks_sizes)
 {
-  public:
-    Block(const BloomFilterBlockParams* p);
-    ~Block();
+    fatal_if(masksLSBs.size() != masksSizes.size(),
+        "Masks haven't been properly provided");
+    fatal_if(masksLSBs.size() < 1,
+        "There must be at least one mask to extract an address bitfield");
 
-    void set(Addr addr) override;
-    void unset(Addr addr) override;
-    int getCount(Addr addr) const override;
+    for (int i = 0; i < masksLSBs.size(); i++) {
+        fatal_if((masksSizes[i] > sizeBits) || (masksSizes[i] <= 0),
+            "The bitfields must be indexable in the filter");
+        fatal_if(masksLSBs[i] + masksSizes[i] >
+            std::numeric_limits<Addr>::digits,
+            "The total size of the bitfields cannot be bigger than the " \
+            "number of bits in an address");
+    }
+}
 
-  private:
-    /**
-     * XOR hash between bitfields of an address, provided by the mask vector.
-     *
-     * @param addr The address to be hashed.
-     * @return The value of the XOR of the masked bitfields of the address.
-     */
-    int hash(Addr addr) const;
+Block::~Block()
+{
+}
 
-    /** Position of the LSB of each mask. */
-    std::vector<unsigned> masksLSBs;
+void
+Block::set(Addr addr)
+{
+    filter[hash(addr)]++;
+}
 
-    /** Number of bits in each mask. */
-    std::vector<unsigned> masksSizes;
-};
+void
+Block::unset(Addr addr)
+{
+    filter[hash(addr)]--;
+}
+
+int
+Block::getCount(Addr addr) const
+{
+    return filter[hash(addr)];
+}
+
+int
+Block::hash(Addr addr) const
+{
+    Addr hashed_addr = 0;
+    for (int i = 0; i < masksLSBs.size(); i++) {
+        hashed_addr ^=
+            bits(addr, offsetBits + masksLSBs[i] + masksSizes[i] - 1,
+            offsetBits + masksLSBs[i]);
+    }
+    assert(hashed_addr < filter.size());
+    return hashed_addr;
+}
 
 } // namespace BloomFilter
 
-#endif // __MEM_RUBY_FILTERS_BLOCKBLOOMFILTER_HH__
+BloomFilter::Block*
+BloomFilterBlockParams::create()
+{
+    return new BloomFilter::Block(this);
+}
+

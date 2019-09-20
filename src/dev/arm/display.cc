@@ -1,6 +1,15 @@
 /*
- * Copyright (c) 1999-2008 Mark D. Hill and David A. Wood
- * All rights reserved.
+ * Copyright (c) 2019 ARM Limited
+ * All rights reserved
+ *
+ * The license below extends only to copyright in the software and shall
+ * not be construed as granting a license to any other intellectual
+ * property including but not limited to intellectual property relating
+ * to a hardware implementation of the functionality of the software
+ * licensed hereunder.  You may use the software subject to the license
+ * terms below provided that you ensure that this notice is replicated
+ * unmodified and in its entirety in all distributions of the software,
+ * modified or unmodified, in source code or in binary form.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -24,44 +33,20 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Authors: Giacomo Travaglini
  */
 
-#ifndef __MEM_RUBY_FILTERS_MULTIGRAINBLOOMFILTER_HH__
-#define __MEM_RUBY_FILTERS_MULTIGRAINBLOOMFILTER_HH__
+#include "dev/arm/display.hh"
 
-#include <vector>
+#include "params/Display.hh"
 
-#include "mem/ruby/filters/AbstractBloomFilter.hh"
+Display::Display(const DisplayParams *p)
+  : SimObject(p)
+{}
 
-struct BloomFilterMultiGrainParams;
-
-namespace BloomFilter {
-
-/**
- * This BloomFilter has multiple sub-filters, each with its own hashing
- * functionality. The results of the operations are the results of applying
- * them to each sub-filter.
- */
-class MultiGrain : public Base
+Display *
+DisplayParams::create()
 {
-  public:
-    MultiGrain(const BloomFilterMultiGrainParams* p);
-    ~MultiGrain();
-
-    void clear() override;
-    void set(Addr addr) override;
-    void unset(Addr addr) override;
-
-    void merge(const Base* other) override;
-    bool isSet(Addr addr) const override;
-    int getCount(Addr addr) const override;
-    int getTotalCount() const override;
-
-  private:
-    /** Sub-filters used by this filter. */
-    std::vector<Base*> filters;
-};
-
-} // namespace BloomFilter
-
-#endif // __MEM_RUBY_FILTERS_MULTIGRAINBLOOMFILTER_HH__
+    return new Display(this);
+}

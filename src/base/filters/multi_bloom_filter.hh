@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2012 ARM Limited
- * All rights reserved
- *
- * The license below extends only to copyright in the software and shall
- * not be construed as granting a license to any other intellectual
- * property including but not limited to intellectual property relating
- * to a hardware implementation of the functionality of the software
- * licensed hereunder.  You may use the software subject to the license
- * terms below provided that you ensure that this notice is replicated
- * unmodified and in its entirety in all distributions of the software,
- * modified or unmodified, in source code or in binary form.
- *
- * Copyright (c) 2002-2005 The Regents of The University of Michigan
+ * Copyright (c) 2019 Inria
+ * Copyright (c) 1999-2008 Mark D. Hill and David A. Wood
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,13 +26,45 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Steve Reinhardt
- *          Andreas Hansson
+ * Authors: Daniel Carvalho
  */
 
-#include "mem/mem_object.hh"
+#ifndef __BASE_FILTERS_MULTI_BLOOM_FILTER_HH__
+#define __BASE_FILTERS_MULTI_BLOOM_FILTER_HH__
 
-MemObject::MemObject(const Params *params)
-    : ClockedObject(params)
+#include <vector>
+
+#include "base/filters/base.hh"
+
+struct BloomFilterMultiParams;
+
+namespace BloomFilter {
+
+/**
+ * This BloomFilter has multiple sub-filters, each with its own hashing
+ * functionality. The results of the operations are the results of applying
+ * them to each sub-filter.
+ */
+class Multi : public Base
 {
-}
+  public:
+    Multi(const BloomFilterMultiParams* p);
+    ~Multi();
+
+    void clear() override;
+    void set(Addr addr) override;
+    void unset(Addr addr) override;
+
+    void merge(const Base* other) override;
+    bool isSet(Addr addr) const override;
+    int getCount(Addr addr) const override;
+    int getTotalCount() const override;
+
+  private:
+    /** Sub-filters used by this filter. */
+    std::vector<Base*> filters;
+};
+
+} // namespace BloomFilter
+
+#endif // __BASE_FILTERS_MULTI_BLOOM_FILTER_HH__

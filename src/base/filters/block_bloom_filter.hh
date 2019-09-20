@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2019 Inria
  * Copyright (c) 1999-2008 Mark D. Hill and David A. Wood
  * All rights reserved.
  *
@@ -24,72 +25,51 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Authors: Daniel Carvalho
  */
 
-#include "mem/ruby/filters/LSB_CountingBloomFilter.hh"
+#ifndef __BASE_FILTERS_BLOCK_BLOOM_FILTER_HH__
+#define __BASE_FILTERS_BLOCK_BLOOM_FILTER_HH__
 
-#include "base/bitfield.hh"
-#include "params/BloomFilterLSBCounting.hh"
+#include <vector>
+
+#include "base/filters/base.hh"
+
+struct BloomFilterBlockParams;
 
 namespace BloomFilter {
 
-LSBCounting::LSBCounting(
-    const BloomFilterLSBCountingParams* p)
-    : Base(p), maxValue(p->max_value)
+/**
+ * Simple deletable (with false negatives) bloom filter that extracts
+ * bitfields of an address to use as indexes of the filter vector.
+ */
+class Block : public Base
 {
-}
+  public:
+    Block(const BloomFilterBlockParams* p);
+    ~Block();
 
-LSBCounting::~LSBCounting()
-{
-}
+    void set(Addr addr) override;
+    void unset(Addr addr) override;
+    int getCount(Addr addr) const override;
 
-void
-LSBCounting::merge(const Base* other)
-{
-    auto* cast_other = static_cast<const LSBCounting*>(other);
-    assert(filter.size() == cast_other->filter.size());
-    for (int i = 0; i < filter.size(); ++i){
-        if (filter[i] < maxValue - cast_other->filter[i]) {
-            filter[i] += cast_other->filter[i];
-        } else {
-            filter[i] = maxValue;
-        }
-    }
-}
+  private:
+    /**
+     * XOR hash between bitfields of an address, provided by the mask vector.
+     *
+     * @param addr The address to be hashed.
+     * @return The value of the XOR of the masked bitfields of the address.
+     */
+    int hash(Addr addr) const;
 
-void
-LSBCounting::set(Addr addr)
-{
-    const int i = hash(addr);
-    if (filter[i] < maxValue)
-        filter[i] += 1;
-}
+    /** Position of the LSB of each mask. */
+    std::vector<unsigned> masksLSBs;
 
-void
-LSBCounting::unset(Addr addr)
-{
-    const int i = hash(addr);
-    if (filter[i] > 0)
-        filter[i] -= 1;
-}
-
-int
-LSBCounting::getCount(Addr addr) const
-{
-    return filter[hash(addr)];
-}
-
-int
-LSBCounting::hash(Addr addr) const
-{
-    return bits(addr, offsetBits + sizeBits - 1, offsetBits);
-}
+    /** Number of bits in each mask. */
+    std::vector<unsigned> masksSizes;
+};
 
 } // namespace BloomFilter
 
-BloomFilter::LSBCounting*
-BloomFilterLSBCountingParams::create()
-{
-    return new BloomFilter::LSBCounting(this);
-}
-
+#endif // __BASE_FILTERS_BLOCK_BLOOM_FILTER_HH__

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999-2008 Mark D. Hill and David A. Wood
+ * Copyright (c) 2019 Inria
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,56 +24,67 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Authors: Daniel Carvalho
  */
 
-#ifndef __MEM_RUBY_FILTERS_MULTIBITSELBLOOMFILTER_HH__
-#define __MEM_RUBY_FILTERS_MULTIBITSELBLOOMFILTER_HH__
+#include "base/filters/perfect_bloom_filter.hh"
 
-#include "mem/ruby/filters/AbstractBloomFilter.hh"
-
-struct BloomFilterMultiBitSelParams;
+#include "params/BloomFilterPerfect.hh"
 
 namespace BloomFilter {
 
-/**
- * The MultiBitSel Bloom Filter associates an address to multiple entries
- * through the use of multiple hash functions.
- */
-class MultiBitSel : public Base
+Perfect::Perfect(const BloomFilterPerfectParams* p)
+    : Base(p)
 {
-  public:
-    MultiBitSel(const BloomFilterMultiBitSelParams* p);
-    ~MultiBitSel();
+}
 
-    void set(Addr addr) override;
-    int getCount(Addr addr) const override;
+Perfect::~Perfect()
+{
+}
 
-  protected:
-    /**
-     * Apply the selected the hash functions to an address.
-     *
-     * @param addr The address to hash.
-     * @param hash_number Index of the hash function to be used.
-     */
-    virtual int hash(Addr addr, int hash_number) const;
+void
+Perfect::clear()
+{
+    entries.clear();
+}
 
-    /** Number of hashes. */
-    const int numHashes;
+void
+Perfect::merge(const Base* other)
+{
+    auto* cast_other = static_cast<const Perfect*>(other);
+    entries.insert(cast_other->entries.begin(), cast_other->entries.end());
+}
 
-    /** Size of the filter when doing parallel hashing. */
-    const int parFilterSize;
+void
+Perfect::set(Addr addr)
+{
+    entries.insert(addr);
+}
 
-    /** Whether hashing should be performed in parallel. */
-    const bool isParallel;
+void
+Perfect::unset(Addr addr)
+{
+    entries.erase(addr);
+}
 
-  private:
-    /**
-     * Bit offset from block number. Used to simulate bit selection hashing
-     * on larger than cache-line granularities, by skipping some bits.
-     */
-    const int skipBits;
-};
+int
+Perfect::getCount(Addr addr) const
+{
+    return entries.find(addr) != entries.end();
+}
+
+int
+Perfect::getTotalCount() const
+{
+    return entries.size();
+}
 
 } // namespace BloomFilter
 
-#endif // __MEM_RUBY_FILTERS_MULTIBITSELBLOOMFILTER_HH__
+BloomFilter::Perfect*
+BloomFilterPerfectParams::create()
+{
+    return new BloomFilter::Perfect(this);
+}
+

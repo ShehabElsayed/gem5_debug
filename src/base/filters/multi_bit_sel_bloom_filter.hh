@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2019 Inria
  * Copyright (c) 1999-2008 Mark D. Hill and David A. Wood
  * All rights reserved.
  *
@@ -24,95 +25,58 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Authors: Daniel Carvalho
  */
 
-#include "mem/ruby/filters/MultiGrainBloomFilter.hh"
+#ifndef __BASE_FILTERS_MULTI_BIT_SEL_BLOOM_FILTER_HH__
+#define __BASE_FILTERS_MULTI_BIT_SEL_BLOOM_FILTER_HH__
 
-#include "base/logging.hh"
-#include "params/BloomFilterMultiGrain.hh"
+#include "base/filters/base.hh"
+
+struct BloomFilterMultiBitSelParams;
 
 namespace BloomFilter {
 
-MultiGrain::MultiGrain(const BloomFilterMultiGrainParams* p)
-    : Base(p), filters(p->filters)
+/**
+ * The MultiBitSel Bloom Filter associates an address to multiple entries
+ * through the use of multiple hash functions.
+ */
+class MultiBitSel : public Base
 {
-}
+  public:
+    MultiBitSel(const BloomFilterMultiBitSelParams* p);
+    ~MultiBitSel();
 
-MultiGrain::~MultiGrain()
-{
-}
+    void set(Addr addr) override;
+    int getCount(Addr addr) const override;
 
-void
-MultiGrain::clear()
-{
-    for (auto& sub_filter : filters) {
-        sub_filter->clear();
-    }
-}
+  protected:
+    /**
+     * Apply the selected the hash functions to an address.
+     *
+     * @param addr The address to hash.
+     * @param hash_number Index of the hash function to be used.
+     */
+    virtual int hash(Addr addr, int hash_number) const;
 
-void
-MultiGrain::merge(const Base* other)
-{
-    auto* cast_other = static_cast<const MultiGrain*>(other);
-    assert(filters.size() == cast_other->filters.size());
-    for (int i = 0; i < filters.size(); ++i){
-        filters[i]->merge(cast_other->filters[i]);
-    }
-}
+    /** Number of hashes. */
+    const int numHashes;
 
-void
-MultiGrain::set(Addr addr)
-{
-    for (auto& sub_filter : filters) {
-        sub_filter->set(addr);
-    }
-}
+    /** Size of the filter when doing parallel hashing. */
+    const int parFilterSize;
 
-void
-MultiGrain::unset(Addr addr)
-{
-    for (auto& sub_filter : filters) {
-        sub_filter->unset(addr);
-    }
-}
+    /** Whether hashing should be performed in parallel. */
+    const bool isParallel;
 
-bool
-MultiGrain::isSet(Addr addr) const
-{
-    int count = 0;
-    for (const auto& sub_filter : filters) {
-        if (sub_filter->isSet(addr)) {
-            count++;
-        }
-    }
-    return count >= setThreshold;
-}
-
-int
-MultiGrain::getCount(Addr addr) const
-{
-    int count = 0;
-    for (const auto& sub_filter : filters) {
-        count += sub_filter->getCount(addr);
-    }
-    return count;
-}
-
-int
-MultiGrain::getTotalCount() const
-{
-    int count = 0;
-    for (const auto& sub_filter : filters) {
-        count += sub_filter->getTotalCount();
-    }
-    return count;
-}
+  private:
+    /**
+     * Bit offset from block number. Used to simulate bit selection hashing
+     * on larger than cache-line granularities, by skipping some bits.
+     */
+    const int skipBits;
+};
 
 } // namespace BloomFilter
 
-BloomFilter::MultiGrain*
-BloomFilterMultiGrainParams::create()
-{
-    return new BloomFilter::MultiGrain(this);
-}
-
+#endif // __BASE_FILTERS_MULTI_BIT_SEL_BLOOM_FILTER_HH__
