@@ -116,6 +116,11 @@ class MyRubySystem(LinuxX86System):
 
     def createCPU(self):
         if self._no_kvm:
+            self.atomicCpu = [AtomicSimpleCPU(cpu_id = i, switched_out = True)
+                        for i in range(self._opts.num_cpus)]
+            map(lambda c: c.createThreads(), self.atomicCpu)
+            self.mem_mode("atomic_noncaching")
+
             # For main run we start aith atomic to ROI and then switch
             #self.cpu = [AtomicSimpleCPU(cpu_id = i, switched_out = False)
             self.cpu = [DerivO3CPU(cpu_id = i, switched_out = False)
