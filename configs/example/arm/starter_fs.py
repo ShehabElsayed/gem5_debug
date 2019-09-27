@@ -63,7 +63,8 @@ import devices
 
 
 default_dist_version = '20170616'
-default_kernel = 'vmlinux.vexpress_gem5_v1_64.' + default_dist_version
+#default_kernel = 'vmlinux.vexpress_gem5_v1_64.' + default_dist_version
+default_kernel = 'vmlinux'
 default_disk = 'linaro-minimal-aarch64.img'
 
 
@@ -235,6 +236,7 @@ def main():
 
     root = Root(full_system=True)
     root.system = create(args)
+    root.system.realview.gic.gem5_extensions = True
 
     if args.restore is not None:
         m5.instantiate(args.restore)
